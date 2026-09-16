@@ -1,416 +1,289 @@
-# curl 源代碼
+# curl Discord Bot (v7.0.0)
 
-这是一個使用Python编写的Discord機器人，支援Slash Commands和Cogs模組化結構。
+<div align="center">
 
-## 功能特點
+![curl Banner](avatar_512x512.png)
 
-- ✅ 使用 Discord.py 2.0+ 
-- ✅ 支援 Slash Commands（斜線指令）
-- ✅ 模組化 Cogs 結構
-- ✅ 自動載入所有 cogs
-- ✅ 環境變數配置
-- ✅ 網頁後台控制台（OAuth2 登入）
-- ✅ 警告系統（自動處罰）
-- ✅ 成就系統（40+ 成就，4 種稀有度）
-- ✅ 等級經驗系統
-- ✅ 簽到系統
-- ✅ 生日系統
-- ✅ 遊戲系統（21點、猜拳、猜數字）
-- ✅ 統計分析系統
-- ✅ 個人資料卡片系統
-- ✅ 反應角色系統
-- ✅ 歡迎/離開系統
-- ✅ 臨時語音頻道系統
-- ✅ 自定義命令系統
-- ✅ 自動日誌記錄系統
-- ✅ 實用工具集合
-- ✅ 終端命令控制
+[![Version](https://img.shields.io/badge/version-v7.0.0-blue.svg)](https://github.com/catrix-dev/curl)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Discord.py](https://img.shields.io/badge/discord.py-2.0%2B-green.svg)](https://github.com/Rapptz/discord.py)
+[![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
+[![GitHub Repo](https://img.shields.io/badge/GitHub-catrix--dev%2Fcurl-black?logo=github)](https://github.com/catrix-dev/curl)
 
-## 指令列表
+**一體化全功能現代 Discord 機器人**  
+整合 AI 智慧對話、客服工單系統、抽獎活動、等級成就、自動回覆、網頁後台與 Cloudflare 展示網站。
 
-### 📋 一般指令 (`/一般`)
-- `/一般 延遲檢查` - 檢查機器人延遲
-- `/一般 打招呼` - 打個招呼
-- `/一般 查看用戶資訊` - 查看用戶詳細資訊
-- `/一般 機器人信息` - 查看機器人資訊
+[🌐 官方展示網站](https://cat6666.me) • [📖 隱私政策](PRIVACY.md) • [🚀 快速開始](#安裝與配置步驟) • [💬 指令清單](#-指令完整清單)
 
-### 🛡️ 管理指令 (`/管理`)
-**基礎管理：**
-- `/管理 踢出用戶` - 踢出成員
-- `/管理 封鎖用戶` - 封禁成員
-- `/管理 清除訊息` - 批量刪除訊息
+</div>
 
-**⚠️ 警告系統：**
-- `/管理 警告` - 警告用戶
-- `/管理 取消警告` - 取消最近一次警告
-- `/管理 警告記錄` - 查看警告歷史
-- `/管理 清除警告` - 清除所有警告（需管理員）
+---
 
-**自動處罰規則：**
-- 3次警告 → 自動踢出伺服器
-- 5次警告 → 自動封禁
+## 🌟 核心特色 (v7.0.0)
 
-### 🎮 遊戲指令 (`/遊戲`)
-- `/遊戲 21點` - 21點撲克遊戲
-- `/遊戲 猜拳` - 猜拳遊戲（剪刀石頭布）
-- `/遊戲 猜數字` - 猜數字遊戲（1-100）
-- `/遊戲 排行榜` - 查看遊戲排行榜
-- `/遊戲 統計` - 查看你的遊戲統計
+- 🤖 **AI 智慧聊天系統**：
+  - 支援多模型架構：Google Gemini (Gemini 2.5 Flash / Flash Lite)、OpenRouter（Claude / GPT-4o 備援）、DeepSeek (V3 / Reasoner)。
+  - 支援圖片視覺辨識（Vision 多模態）、檔案分析、獨立頻道常駐免 @ 對話。
+  - 獨立記憶庫機制：群體上下文對話記憶、全域持久記憶與專屬人設 Prompt 自訂。
+  - 智慧配額與防護：每日 AI 呼叫額度配置、繪圖/生圖額度限制、黑名單封禁。
+- 🎫 **專業客服工單系統 (Tickets)**：
+  - 一鍵創建獨立工單頻道、支援自訂面板、邀請協作成員。
+  - 工單關閉時自動生成完整 HTML Transcript 歷史對話備查。
+- 🎁 **進階抽獎系統 (Giveaways)**：
+  - 支援身分組門檻、等級要求、發言次數限制。
+  - 支援即時開獎、提早結案、自動重新抽選與名單公佈。
+- 💬 **關鍵字自動回覆 (Auto Reply)**：
+  - 支援完全符合、包含關鍵詞、正則表達式 (Regex) 匹配。
+  - 支援普通訊息、回覆 (Reply)、私訊 (DM)、表情反應等多種模式。
+- 🛡️ **安全防護與警告系統**：
+  - 防刷屏、釣魚連結攔截、封禁名單管理。
+  - 智慧累進警告懲罰（達上限自動執行踢出或封禁）。
+- 📊 **社群互動與等級成就**：
+  - 40+ 項成就自動追蹤與成就卡片展示。
+  - 等級經驗系統、每日簽到排行榜、生日定時祝福提醒。
+- 🌐 **雙層 Web 服務**：
+  - **Web Dashboard 後台** (`web/`)：支援 Discord OAuth2 登入，即時監控機器人統計、查看用戶工單與管理伺服器。
+  - **Cloudflare Pages 展示官網** (`site/`)：現代化響應式首頁與隱私權規範，支援一鍵發布至 Cloudflare Pages / Workers。
+- 🔄 **自動更新檢測**：
+  - 內建與 `catrix-dev/curl` 倉庫比對版本，自動提醒更新。
 
-### 🎭 娛樂指令 (`/娛樂`)
-- `/娛樂 投擲骰子` - 投擲骰子
-- `/娛樂 擲硬幣` - 擲硬幣
-- `/娛樂 魔法8球` - 魔法8球問答
-- `/娛樂 幫你選擇` - 幫你做選擇
+---
+
+## 📋 指令完整清單
+
+### 🤖 AI 智慧聊天 (`/ai`, `/ai-admin`)
+- `/ai 聊天 [訊息] [圖片]` - 與 AI 進行對話，可附加圖片進行視覺解析
+- `/ai 設定頻道 [頻道]` - 將指定頻道設定為 AI 專屬互動頻道（無需 @ 即可對話）
+- `/ai 移除頻道 [頻道]` - 移除 AI 專屬對話頻道
+- `/ai 頻道記憶重置` - 重置當前頻道的 AI 對話上下文記憶
+- `/ai 專屬頻道清單` - 查看目前伺服器所有已啟用的 AI 頻道
+- `/ai 封禁名單` - 查看被禁止使用 AI 聊天的成員名單
+- `/ai 封禁用戶 [成員]` - 禁止特定用戶使用 AI 聊天功能
+- `/ai 解封用戶 [成員]` - 解除用戶的 AI 聊天封禁
+- `/ai-admin 伺服器上限 [數量]` - 設定伺服器每日 AI 對話總額度 (200~2000)
+- `/ai-admin 圖片額度 [身分組] [數量]` - 配置特定身分組每日圖片解析額度
+- `/ai-admin 設定提示詞 [提示詞]` - 為伺服器自訂 AI 人設與系統提示詞
+- `/ai-admin 查看提示詞` / `清除提示詞` - 檢視或重置自訂提示詞
+
+### 🎁 抽獎系統 (`/抽獎`)
+- `/抽獎 發起` - 發起抽獎活動（自訂獎品、時間、中獎人數、身分組/等級門檻）
+- `/抽獎 結束 [抽獎ID]` - 提早結束抽獎並立即抽選得獎者
+- `/抽獎 重抽 [訊息ID]` - 重新抽選中獎者
+- `/抽獎 取消 [訊息ID]` - 取消進行中的抽獎活動
+- `/抽獎 列表` - 查看目前伺服器進行中的所有抽獎活動
+
+### 💬 自動回覆 (`/自動回覆`)
+- `/自動回覆 添加` - 新增自動回覆規則（支援包含、開頭、結尾、正則表達式）
+- `/自動回覆 列表` - 查看伺服器內所有生效的自動回覆規則
+- `/自動回覆 刪除 [規則ID]` - 刪除指定的自動回覆規則
+- `/自動回覆 開關 [狀態]` - 啟用或停用自動回覆系統
+- `/自動回覆 清除` - 清空伺服器所有自動回覆規則
+
+### 🎫 客服工單 (`/工單`)
+- `/工單 面板` - 在指定頻道發送工單創建面板
+- `/工單 設定` - 配置工單分類、日誌記錄頻道與管理員身分組
+- `/工單 開關` - 啟用或停用工單系統
+- `/工單 添加 [成員]` - 添加成員至當前工單頻道
+- `/工單 移除 [成員]` - 從當前工單頻道移除成員
+- `/工單 列表` - 查看當前進行中的所有工單
+
+### 🛡️ 伺服器管理 (`/管理`)
+- `/管理 警告 [成員] [原因]` - 對成員發出警告
+- `/管理 取消警告 [成員]` - 撤回成員最近一次的警告記錄
+- `/管理 警告記錄 [成員]` - 查詢成員的警告歷史與累計次數
+- `/管理 清除警告 [成員]` - 清空成員的所有警告記錄
+- `/管理 踢出用戶 [成員]` - 將成員踢出伺服器
+- `/管理 封鎖用戶 [成員]` - 封鎖指定成員
+- `/管理 清除訊息 [數量]` - 批量清理頻道內的歷史訊息
+
+### 👤 個人卡片與社交 (`/個人資料`, `/等級`, `/簽到`, `/生日`)
+- `/個人資料 查看` - 查看個人特色個人檔案卡
+- `/個人資料 設定簡介` / `設定標題` / `設定顏色` - 自訂卡片風格
+- `/等級 查看` - 查看個人當前等級與 EXP 進度
+- `/等級 排行榜` - 顯示伺服器成員活躍經驗排行榜
+- `/簽到 打卡` - 每日簽到領取點數與累積天數
+- `/簽到 排行榜` - 查看伺服器簽到積分總排行
+- `/生日 設定 [月] [日]` - 記錄個人生日資訊
+- `/生日 列表` - 查看本月份過生日的成員清單
 
 ### 🏆 成就系統 (`/成就`)
-- `/成就 列表` - 查看所有可用成就
-- `/成就 我的成就` - 查看已解鎖的成就
-- `/成就 進度` - 查看成就解鎖進度
-- **成就類型**: 訊息、等級、遊戲、簽到、特殊
-- **稀有度**: 普通、稀有、史詩、傳奇
-- **自動解鎖**: 達成條件後自動解鎖
+- `/成就 我的成就` - 檢視個人已解鎖之榮譽成就
+- `/成就 列表` - 瀏覽伺服器所有成就與獲取條件
+- `/成就 進度` - 查詢當前各項成就的達成百分比
 
-### 📊 伺服器資訊 (`/伺服器`)
-- `/伺服器 資訊` - 查看伺服器詳細資訊
-- `/伺服器 圖標` - 查看伺服器圖標
-- `/伺服器 成員統計` - 成員統計和在線狀態
-- `/伺服器 角色列表` - 查看所有角色
+### 🎭 娛樂與小遊戲 (`/遊戲`, `/娛樂`, `/匿名`)
+- `/遊戲 21點` - 經典 Blackjack 撲克對決
+- `/遊戲 猜拳` - 剪刀石頭布對戰
+- `/遊戲 猜數字` - 1-100 數字猜謎挑戰
+- `/娛樂 投擲骰子` / `擲硬幣` / `魔法8球` / `幫你選擇` - 派對與隨機決策工具
+- `/匿名 發言 [內容]` - 在授權頻道內以匿名身分發布訊息
 
-### ⭐ 等級系統 (`/等級`)
-- `/等級 查看` - 查看等級和經驗
-- `/等級 排行榜` - 查看等級排行榜
-- `/等級 重置` - 重置用戶等級（需管理員）
-- **自動功能**: 發送訊息獲得經驗，升級自動通知
+### 🔧 實用工具與伺服器資訊 (`/工具`, `/伺服器`, `/一般`)
+- `/工具 計算器 [表達式]` - 即時計算數學算式
+- `/工具 倒數計時 [時間]` - 建立定時倒數器
+- `/工具 投票 [標題] [選項...]` - 建立互動投票面板
+- `/伺服器 資訊` / `成員統計` / `角色列表` - 伺服器概況
+- `/一般 延遲檢查` / `機器人信息` - 系統運行指標
 
-### 📅 簽到系統 (`/簽到`)
-- `/簽到 查看` - 查看簽到資訊
-- `/簽到 打卡` - 每日簽到取得積分
-- `/簽到 排行榜` - 簽到排行榜
-- `/簽到 重置` - 重置用戶簽到（需管理員）
+---
 
-### 🎂 生日系統 (`/生日`)
-- `/生日 設定` - 設定你的生日
-- `/生日 查看` - 查看生日資訊
-- `/生日 列表` - 查看本月生日名單
-- `/生日 刪除` - 刪除你的生日
-- `/生日 開關` - 開啟/關閉生日提醒（需管理員）
-- `/生日 設定頻道` - 設定生日通知頻道（需管理員）
+## 🛠️ 安裝與配置步驟
 
-### 📈 統計系統 (`/統計`)
-- `/統計 活躍度` - 查看同服活躍度統計
-- `/統計 活躍排行` - 查看活躍用戶排行
-- `/統計 熱門頻道` - 查看熱門頻道
-- `/統計 時段分析` - 查看24小時活躍分析
-- `/統計 我的統計` - 查看你的個人統計
+### 1. 克隆倉庫與安裝依賴
 
-### 👤 個人資料 (`/個人資料`)
-- `/個人資料 查看` - 查看個人資料卡片
-- `/個人資料 設定簡介` - 設定個人簡介（最多100字）
-- `/個人資料 設定標題` - 設定個人標題（最多30字）
-- `/個人資料 設定顏色` - 自定義卡片顏色（十六進位）
-- `/個人資料 清除` - 清除所有自定義設定
+環境需求：**Python 3.10+**
 
-### 👆 反應角色 (`/反應角色`)
-- `/反應角色 創建` - 創建反應角色訊息
-- `/反應角色 列表` - 查看所有反應角色
-- `/反應角色 添加` - 為訊息添加反應角色
-- `/反應角色 移除` - 移除反應角色
-
-### 👋 歡迎系統 (`/歡迎系統`)
-- `/歡迎系統 查看設定` - 查看歡迎系統設定
-- `/歡迎系統 開關` - 啟用/停用歡迎或離開系統
-- `/歡迎系統 設定歡迎頻道` - 設定歡迎訊息頻道
-- `/歡迎系統 設定歡迎訊息` - 自訂歡迎訊息
-- `/歡迎系統 設定離開頻道` - 設定離開訊息頻道
-- `/歡迎系統 設定離開訊息` - 自訂離開訊息
-- **網頁管理**: 可在網頁控制台完全自定義
-
-### 🎤 臨時語音 (`/臨時語音`)
-- `/臨時語音 設定` - 設定觸發頻道和分類
-- `/臨時語音 停用` - 停用系統
-- `/臨時語音 狀態` - 查看系統狀態
-- `/臨時語音 限制人數` - 設定頻道人數上限
-- `/臨時語音 重命名` - 重命名你的臨時頻道
-- **自動功能**: 用戶加入觸發頻道自動創建，離開後自動刪除
-- **網頁管理**: 可在網頁控制台配置
-
-### 📝 自定義命令 (`/自定義`)
-- `/自定義 添加` - 添加自定義命令
-- `/自定義 刪除` - 刪除自定義命令
-- `/自定義 編輯` - 編輯命令內容
-- `/自定義 列表` - 查看所有自定義命令
-- **使用方式**: 用 `!命令名稱` 觸發
-- **網頁管理**: 可在網頁控制台管理
-
-### 🔧 工具指令 (`/工具`)
-- `/工具 頭像` - 查看用戶頭像
-- `/工具 計算器` - 計算數學表達式
-- `/工具 倒數計時` - 創建倒數計時
-- `/工具 投票` - 創建投票（最多5個選項）
-- `/工具 提醒我` - 設定定時提醒
-- `/工具 縮短文字` - 縮短長文本
-- `/工具 隨機數` - 生成隨機數
-
-### 🔍 日誌系統
-- 自動記錄所有指令使用
-- 彩色 Embed 格式，按類型顯示不同顏色
-- 需在 `.env` 配置日誌頻道 ID
-
-## 安裝步骤
-
-### 1. 安裝依賴
 ```bash
+git clone https://github.com/catrix-dev/curl.git
+cd curl
 pip install -r requirements.txt
 ```
 
-### 2. 配置環境變數
-複製 `.env.example` 為 `.env`，然後編輯填入以下資訊：
+### 2. 環境變數設定
 
-```env
-# Discord Bot Token（必需）
-DISCORD_TOKEN=你的機器人token
+複製 `.env.example` 為 `.env`：
 
-# 日誌頻道 ID（可選）
-LOG_CHANNEL_ID=日誌頻道的ID
-
-# 網頁控制台設定（可選）
-WEB_PORT=8080
-
-# Discord OAuth2 設定（網頁登入必需）
-DISCORD_CLIENT_ID=你的應用ID
-DISCORD_CLIENT_SECRET=你的應用密鑰
-DISCORD_REDIRECT_URI=http://localhost:8080/callback
-
-# Session 密鑰（可選，會自動生成）
-SESSION_SECRET=隨機44字符的密鑰
+```bash
+cp .env.example .env
 ```
 
-### 3. 獲取 Discord Bot Token 和 OAuth2 設定
+編輯 `.env` 並配置核心參數：
 
-1. 前往 [Discord Developer Portal](https://discord.com/developers/applications)
-2. 創建新應用或選擇現有應用
-3. 在左側選單選擇 "Bot"
-4. 點擊 "Add Bot"（如果還沒有）
-5. 複製 Token 並填入 `.env` 的 `DISCORD_TOKEN`
-6. 在 "Privileged Gateway Intents" 中啟用：
-   - **MESSAGE CONTENT INTENT** - 讀取訊息內容
-   - **SERVER MEMBERS INTENT** - 獲取成員列表
-   - **PRESENCE INTENT** - 獲取成員在線狀態
+```env
+# Discord 核心金鑰（必填）
+DISCORD_TOKEN=你的_DISCORD_BOT_TOKEN
+DEV_ID=你的_DISCORD_USER_ID
+LOG_CHANNEL_ID=日誌頻道的_CHANNEL_ID
 
-**OAuth2 設定（網頁控制台必需）：**
-1. 在左側選單選擇 "OAuth2" > "General"
-2. 複製 "CLIENT ID" 並填入 `.env` 的 `DISCORD_CLIENT_ID`
-3. 複製 "CLIENT SECRET" 並填入 `.env` 的 `DISCORD_CLIENT_SECRET`
-4. 在 "Redirects" 中添加：`http://localhost:8080/callback`
-5. 如果部署到伺服器，也添加：`http://你的IP:8080/callback`
+# 網頁後台與 OAuth2
+WEB_PORT=8080
+DISCORD_CLIENT_ID=你的_CLIENT_ID
+DISCORD_CLIENT_SECRET=你的_CLIENT_SECRET
+DISCORD_REDIRECT_URI=http://localhost:8080/callback
+SESSION_SECRET=隨機產生的44位安全字串
 
-**獲取頻道 ID（可選）：**
-1. 在 Discord 中啟用開發者模式（設定 > 進階 > 開發者模式）
-2. 右鍵點擊要用作日誌的頻道
-3. 點擊 "複製頻道 ID"
-4. 填入 `.env` 的 `LOG_CHANNEL_ID`
+# AI 服務供應商 (可選: openrouter / deepseek / gemini)
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=你的_OPENROUTER_API_KEY
+OPENROUTER_MODEL=google/gemini-2.5-flash
+OPENROUTER_MODELS=google/gemini-2.5-flash,google/gemini-3.7-flash,anthropic/claude-sonnet-5
+OPENROUTER_VISION_MODELS=google/gemini-2.5-flash,google/gemini-3.7-flash
 
-### 4. 邀請機器人到伺服器
+# Google Gemini 直接連線（多 Key 備援）
+GEMINI_API_KEYS=key1,key2
+GEMINI_MODEL=gemini-2.5-flash-lite
 
-1. 在Developer Portal中選擇 "OAuth2" > "URL Generator"
-2. 選擇scope:
-   - `bot`
-   - `applications.commands`
-3. 選擇Bot Permissions (根據需要):
-   - Send Messages
-   - Manage Messages
-   - Kick Members
-   - Ban Members
-   - Embed Links
-   等等
-4. 複製生成的URL并在浏览器中打开，選擇伺服器邀請機器人
+# DeepSeek 備援連線
+DEEPSEEK_API_KEY=你的_DEEPSEEK_API_KEY
+DEEPSEEK_MODEL=deepseek-chat
 
-### 5. 運行機器人
+# Lavalink 音樂服務節點（選填）
+LAVALINK_HOST=127.0.0.1
+LAVALINK_PORT=2333
+LAVALINK_PASSWORD=youshallnotpass
+LAVALINK_SECURE=false
+
+# 閘道特權意圖 (Privileged Gateway Intents)
+INTENT_MESSAGE_CONTENT=true
+INTENT_MEMBERS=true
+INTENT_PRESENCES=false
+```
+
+### 3. 開啟 Discord 開發者意圖
+
+至 [Discord Developer Portal](https://discord.com/developers/applications)：
+1. 進入您的應用 > **Bot** 頁面。
+2. 在 **Privileged Gateway Intents** 區域勾選：
+   - **PRESENCE INTENT**
+   - **SERVER MEMBERS INTENT**
+   - **MESSAGE CONTENT INTENT**
+3. 進入 **OAuth2** > **General** > 添加 Redirect: `http://localhost:8080/callback`（部署至伺服器請替換為真實域名或公網 IP）。
+
+### 4. 啟動機器人
+
 ```bash
 python bot.py
 ```
 
-機器人啟動後會自動：
-- 顯示精美的啟動橫幅
-- 載入所有 Cogs 模組
-- 同步 Slash 指令
-- 啟動網頁後台控制台（預設端口：8080）
-- 啟動終端命令監聽
+終端將顯示啟動 Banner，並在指定端口（預設 8080）啟動 Web Dashboard。
 
-**訪問網頁控制台**：
-- 本地訪問：http://localhost:8080
-- 網路訪問：http://你的IP:8080
-- 使用 Discord 帳號登入（OAuth2）
+---
 
-**網頁管理功能**：
-- 📊 實時統計數據：成員數、頻道數、角色數等
-- ⭐ 等級系統：查看排行榜和用戶等級
-- 📅 簽到系統：簽到統計和排行
-- 👋 歡迎系統：完全自定義歡迎/離開訊息和頻道
-- 🎂 生日系統：查看生日列表
-- 🎮 遊戲系統：遊戲統計和排行
-- 📈 活躍度分析：伺服器活躍度數據
-- 📝 自定義命令：創建和管理自定義命令
-- 🎤 臨時語音：配置臨時語音頻道設定
-- ⚠️ 警告系統：查看和管理用戶警告記錄
-- 🏆 成就系統：查看用戶成就解鎖情況、授予/撤銷成就
+## 💻 終端即時互動控制
 
-**終端命令控制**：
-機器人運行時，可直接在終端輸入以下命令進行控制：
-- `restart` 或 `重啟` - 重新啟動機器人
-- `stop` 或 `關閉` - 安全關閉機器人
-- `status` 或 `狀態` - 顯示機器人當前狀態
-- `help` 或 `幫助` - 顯示終端命令幫助
+機器人運行時，您可直接在啟動的終端輸入下列快捷指令：
 
-## 添加新的 Cog
+- `status` / `狀態` - 檢視目前連線延遲、記憶體占用、伺服器數與用戶數。
+- `restart` / `重啟` - 平滑重啟機器人連線與模組。
+- `stop` / `關閉` - 安全關閉機器人並儲存所有數據。
+- `help` / `幫助` - 顯示終端控制說明。
 
-在 `cogs/` 資料夾中創建新的 Python 檔案，例如 `cogs/mycog.py`：
+---
 
-```python
-import discord
-from discord import app_commands
-from discord.ext import commands
-
-class MyCog(commands.Cog):
-    """我的自訂 Cog"""
-    
-    def __init__(self, bot):
-        self.bot = bot
-    
-    @app_commands.command(name="mycommand", description="我的指令描述")
-    async def mycommand(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Hello!")
-    
-    @commands.Cog.listener()
-    async def on_ready(self):
-        print(f'📦 {self.__class__.__name__} cog已載入')
-
-async def setup(bot):
-    await bot.add_cog(MyCog(bot))
-```
-
-機器人會自動載入所有在 `cogs/` 資料夾中的 Python 檔案。
-
-## 專案結構
+## 📂 專案架構目錄
 
 ```
 .
-├── bot.py                  # 主程式檔案
-├── version.txt             # 版本號
-├── .env                    # 環境變數（需要創建）
-├── .env.example            # 環境變數示例
-├── requirements.txt        # Python 依賴
-├── README.md               # 說明文檔
-├── .gitignore              # Git 忽略檔案
-├── data/                   # 數據目錄（自動生成）
-│   └── [guild_id]/         # 各伺服器數據
-│       ├── levels.json           # 等級數據
-│       ├── daily.json            # 簽到數據
-│       ├── birthdays.json        # 生日數據
-│       ├── welcome.json          # 歡迎系統設定
-│       ├── custom_commands.json  # 自定義命令
-│       ├── temp_voice.json       # 臨時語音設定
-│       ├── warnings.json         # 警告記錄
-│       ├── achievements.json     # 成就數據
-│       ├── reaction_roles.json   # 反應角色
-│       ├── profiles.json         # 個人資料
-│       └── statistics.json       # 統計數據
-├── web/                    # 網頁控制台
-│   ├── server.py           # Web 伺服器
-│   ├── index.html          # 登入頁面
-│   ├── select_server.html  # 伺服器選擇
-│   └── dashboard.html      # 控制台主頁
-└── cogs/                   # Cogs 資料夾
-    ├── general.py          # 一般指令
-    ├── moderation.py       # 管理指令（含警告系統）
-    ├── fun.py              # 娛樂指令
-    ├── serverinfo.py       # 伺服器資訊統計
-    ├── utilities.py        # 實用工具集合
-    ├── leveling.py         # 等級系統
-    ├── daily.py            # 簽到系統
-    ├── birthday.py         # 生日系統
-    ├── welcome.py          # 歡迎/離開系統
-    ├── temp_voice.py       # 臨時語音頻道
-    ├── custom_commands.py  # 自定義命令
-    ├── profile.py          # 個人資料卡片
-    ├── achievements.py     # 成就系統
-    ├── reaction_roles.py   # 反應角色
-    ├── statistics.py       # 統計分析
-    └── logging_system.py   # 日誌系統
+├── bot.py                  # 機器人主入口程式（狀態監控、Cogs 自動載入、終端監聽）
+├── storage.py              # 資料持久化存取抽象層
+├── version.txt             # 版本號檔案 (7.0.0)
+├── requirements.txt        # Python 依賴套件清單
+├── README.md               # 專案說明與指南文檔
+├── PRIVACY.md              # 隱私權政策條款
+├── LICENSE                 # MIT 開源授權
+├── .env.example            # 環境變數範例配置
+├── .gitignore              # Git 版本控制忽略清單
+├── site/                   # 官方形象宣傳網站 (支援 Cloudflare Pages / Workers)
+│   ├── index.html          # 官方介紹首頁
+│   ├── privacy.html        # 官方隱私權條款頁面
+│   ├── style.css           # 樣式表
+│   ├── main.js             # 動態互動腳本
+│   └── wrangler.toml       # Cloudflare Pages 部署設定
+├── web/                    # 網頁控制台 (Web Dashboard)
+│   ├── server.py           # Aiohttp Web 伺服器與 OAuth2 認證模組
+│   ├── index.html          # 後台登入首頁
+│   ├── select_server.html  # 伺服器切換選擇面板
+│   ├── dashboard.html      # 主管理儀表板
+│   ├── dev-panel.html      # 開發者高權限管理面板
+│   ├── my-tickets.html     # 用戶工單檢視中心
+│   ├── privacy.html        # 儀表板端隱私條款
+│   └── 404.html            # 404 導向頁
+├── data/                   # 數據儲存目錄 (按伺服器 ID 隔離，已忽略上傳)
+└── cogs/                   # 模組化功能擴展庫
+    ├── ai_chat.py          # AI 智慧對話、視覺辨識與記憶管理
+    ├── giveaway.py         # 抽獎活動管理
+    ├── auto_reply.py       # 關鍵字自動回覆規則系統
+    ├── tickets.py          # 客服工單與 HTML 紀錄存檔
+    ├── moderation.py       # 警告系統與管理指令
+    ├── security.py         # 防刷屏、防釣魚與安全過濾
+    ├── leveling.py         # 等級與經驗計算
+    ├── achievements.py     # 成就解鎖追蹤
+    ├── daily.py            # 每日打卡簽到
+    ├── birthday.py         # 生日自動提醒
+    ├── anonymous.py        # 匿名發言與投遞
+    ├── feedback.py         # 意見回饋與工單派送
+    ├── temp_voice.py       # 動態臨時語音頻道
+    ├── custom_commands.py  # 自訂文字命令
+    ├── reaction_roles.py   # 反應身分組綁定
+    ├── general.py          # 一般互動與幫助選單
+    ├── fun.py              # 趣味娛樂指令
+    ├── games.py            # 迷你休閒遊戲
+    ├── utilities.py        # 實用輔助小工具
+    ├── serverinfo.py       # 伺服器統計概況
+    ├── statistics.py       # 活躍度數據分析
+    ├── logging_system.py   # 系統事件日誌記錄
+    └── updater.py          # 自動版本檢查更新
 ```
 
-## 等級系統說明
+---
 
-等級系統會自動追蹤用戶的活躍度：
-- 每發送一則訊息獲得 15-25 隨機經驗值
-- 60秒冷卻時間防止刷經驗
-- 升級時自動發送通知
-- 數據存儲在 `./data/[guild_id]/levels.json` 檔案中
-- 每個伺服器的數據獨立
+## 🔒 數據安全與隱私
 
-**經驗公式**: 
-- 等級 1→2: 100 XP
-- 等級 2→3: 150 XP
-- 等級 N→N+1: 100 + (N-1) × 50 XP
+- 本機器人注重隱私與伺服器數據隔離，所有伺服器設定皆獨立保存在 `./data/<Guild_ID>/` 目錄下。
+- 專案嚴格遵循隱私安全政策，不收集個人敏感私鑰與通訊明文，詳細條款請參閱 [PRIVACY.md](PRIVACY.md)。
 
-## 數據存儲
+---
 
-所有數據按伺服器 ID 分別存儲在 `./data/[guild_id]/` 目錄下：
-- **levels.json** - 等級和經驗數據
-- **daily.json** - 簽到記錄和積分
-- **birthdays.json** - 生日資訊
-- **welcome.json** - 歡迎系統設定
-- **custom_commands.json** - 自定義命令
-- **temp_voice.json** - 臨時語音設定
-- **warnings.json** - 警告記錄
-- **achievements.json** - 成就解鎖狀態
-- **reaction_roles.json** - 反應角色配置
-- **profiles.json** - 個人資料自定義
-- **statistics.json** - 活躍度統計
+## 📄 授權條款
 
-建議定期備份 `./data/` 資料夾。
-
-## 注意事項
-
-- 確保機器人有足夠的權限執行指令
-- Slash commands 需要一些時間同步（最多1小時）
-- 首次運行時會自動同步所有 slash commands
-- 不要將 `.env` 檔案提交到 Git 倉庫
-- `./data/` 資料夾會自動創建，建議定期備份
-- 網頁控制台需要正確配置 Discord OAuth2 設定
-- 警告系統會自動處罰：3次踢出、5次封禁
-- 成就系統會自動追蹤用戶行為並解鎖成就
-
-## 故障排除
-
-### Slash commands 沒有顯示
-- 確保 bot 有 `applications.commands` scope
-- 等待最多1小時讓 Discord 同步指令
-- 檢查機器人是否在伺服器中
-- 嘗試在終端輸入 `restart` 重啟機器人
-
-### 權限錯誤
-- 確保在 Developer Portal 中啟用了必要的 Intents
-- 檢查機器人在伺服器中的角色權限
-- 確認機器人角色位置高於要管理的角色
-
-### 網頁控制台無法登入
-- 檢查 `.env` 中的 OAuth2 設定是否正確
-- 確認 Redirect URI 在 Developer Portal 中已添加
-- 檢查 `SESSION_SECRET` 是否設定（可自動生成）
-- 確保網頁端口未被其他程序佔用
-
-### 數據未保存
-- 檢查 `./data/[guild_id]/` 目錄是否有寫入權限
-- 確認相關 JSON 檔案格式正確
-- 查看終端錯誤訊息
-
-### 警告系統不工作
-- 確保機器人有 "踢出成員" 和 "封禁成員" 權限
-- 檢查 `./data/[guild_id]/warnings.json` 是否存在
-- 確認執行者權限高於被警告者
-
-## 許可證
-
-MIT License
+本專案基於 [MIT License](LICENSE) 條款開源。歡迎自由 Fork、客製化或提交 Pull Request。
