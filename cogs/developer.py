@@ -132,6 +132,75 @@ class Developer(commands.Cog):
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
+    def process_ai_unban(self, executor_name: str, executor_id: int, raw_target: str) -> discord.Embed:
+        """處理 AI 頻率限制解封邏輯，讓用戶退出限制模式，保留所有歷史記錄"""
+        clean_id = re.sub(r"[<@!>]", "", raw_target.strip()).strip()
+        if not clean_id or not clean_id.isdigit():
+            embed = discord.Embed(
+                title="❌ 參數錯誤",
+                description="請提供有效的用戶 ID 或 @提及 用戶！\n範例：`!ai unban 123456789012345678` 或 `!ai unban @用戶`",
+                color=discord.Color.red()
+            )
+            return embed
+
+        target_uid = int(clean_id)
+        ai_cog = self.bot.get_cog('AIChat')
+        if not ai_cog or not hasattr(ai_cog, 'abuse_limiter'):
+            embed = discord.Embed(
+                title="❌ 模組未載入",
+                description="無法連接到 AI 聊天模組或頻率限制器尚未初始化！",
+                color=discord.Color.red()
+            )
+            return embed
+
+        detail = ai_cog.abuse_limiter.unban_user_detailed(
+            target_uid,
+            unbanned_by=f"{executor_name} ({executor_id})"
+        )
+
+        embed = discord.Embed(
+            title="🔓 用戶已退出 AI 限制模式",
+            description=f"已成功讓用戶 <@{target_uid}> (`{target_uid}`) 退出限制模式！",
+            color=discord.Color.green(),
+            timestamp=datetime.now()
+        )
+
+        # 解除前狀態描述
+        if detail.get("was_banned"):
+            prev_status = "🚫 永久暫停模式 (第 5 級懲罰)"
+        elif detail.get("was_cooling_down"):
+            prev_status = f"⏳ 冷卻限制中 (剩餘 {detail.get('cooldown_remaining', 0)} 秒，懲罰等級 {detail.get('previous_level', 0)})"
+        else:
+            prev_status = "⚪ 正常狀態 (未處於封鎖或冷卻中)"
+
+        embed.add_field(
+            name="📋 解除前狀態",
+            value=prev_status,
+            inline=False
+        )
+
+        embed.add_field(
+            name="⚡ 當前模式",
+            value="🟢 **正常可用**（限制已解除，冷卻已清除，計數窗口已歸位）",
+            inline=False
+        )
+
+        embed.add_field(
+            name="📊 歷史違規記錄（完整保留）",
+            value=f"累計違規次數：**{detail.get('total_violations', 0)}** 次\n*(歷史違規記錄完整保留，未刪除)*",
+            inline=True
+        )
+
+        embed.add_field(
+            name="📝 歷次解除記錄（完整保留）",
+            value=f"累計解除次數：**{detail.get('unban_count', 0)}** 次\n*(歷次解封記錄與明細完整保留)*",
+            inline=True
+        )
+
+        embed.set_footer(text=f"執行者: {executor_name} | 指令: !ai unban")
+        print(f"✅ 開發者 {executor_name} ({executor_id}) 解除了用戶 {target_uid} 的限制模式 (違規記錄: {detail.get('total_violations')} 次, 解除次數: {detail.get('unban_count')} 次)")
+        return embed
+
     @dev_group.command(name="執行", description="執行 Python 代碼")
     @app_commands.describe(代碼="要執行的 Python 代碼")
     async def eval_code(self, interaction: discord.Interaction, 代碼: str):
@@ -144,6 +213,18 @@ class Developer(commands.Cog):
             return
         
         await interaction.response.defer(ephemeral=True)
+
+        # 攔截 !ai unban <userid> 或 ai unban <userid>
+        unban_match = re.match(r"^!?ai\s+unban(?:\s+(.*))?$", 代碼.strip(), re.IGNORECASE)
+        if unban_match:
+            raw_target = unban_match.group(1) or ""
+            embed = self.process_ai_unban(
+                executor_name=interaction.user.name,
+                executor_id=interaction.user.id,
+                raw_target=raw_target
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
         
         try:
             # 执行代码
@@ -474,35 +555,32 @@ class Developer(commands.Cog):
             )
             return
 
-        clean_id = re.sub(r"[<@!>]", "", 用戶).strip()
-        if not clean_id.isdigit():
-            await interaction.response.send_message(
-                "❌ 請輸入正確的用戶 ID 或 @提及 用戶！", 
-                ephemeral=True
-            )
+        embed = self.process_ai_unban(
+            executor_name=interaction.user.name,
+            executor_id=interaction.user.id,
+            raw_target=用戶
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """監聽文字訊息指令（如開發者輸入 !ai unban <userid>）"""
+        if message.author.bot:
             return
 
-        target_uid = int(clean_id)
-        ai_cog = self.bot.get_cog('AIChat')
-        if not ai_cog or not hasattr(ai_cog, 'abuse_limiter'):
-            await interaction.response.send_message(
-                "❌ 無法連接到 AI 聊天模組或頻率限制器尚未初始化！", 
-                ephemeral=True
-            )
-            return
+        content = message.content.strip()
+        unban_match = re.match(r"^!?ai\s+unban(?:\s+(.*))?$", content, re.IGNORECASE)
+        if unban_match:
+            if not self.is_developer(message.author.id):
+                return
 
-        success = ai_cog.abuse_limiter.unban_user(target_uid)
-        if success:
-            await interaction.response.send_message(
-                f"✅ 已成功解封用戶 `<@{target_uid}>` (`{target_uid}`) 的 AI 頻率限制，違規等級已重置為 0！", 
-                ephemeral=True
+            raw_target = unban_match.group(1) or ""
+            embed = self.process_ai_unban(
+                executor_name=message.author.name,
+                executor_id=message.author.id,
+                raw_target=raw_target
             )
-            print(f'✅ 開發者 {interaction.user.name} 解封了用戶 {target_uid} 的 AI 頻率限制')
-        else:
-            await interaction.response.send_message(
-                f"ℹ️ 用戶 `<@{target_uid}>` (`{target_uid}`) 未在違規名單中，已重置其快取。", 
-                ephemeral=True
-            )
+            await message.reply(embed=embed)
     
     @commands.Cog.listener()
     async def on_ready(self):

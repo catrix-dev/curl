@@ -3473,22 +3473,75 @@ class AIQuotaAbuseLimiter:
 
         return True, ""
 
-    def unban_user(self, user_id: int) -> bool:
-        """開發者解封用戶，重置懲罰等級為 0"""
+    def unban_user_detailed(self, user_id: int, unbanned_by: Optional[str] = None) -> dict:
+        """
+        開發者解除用戶限制模式，退出當前懲罰或冷卻。
+        保留該用戶既有的違規記錄、統計次數與所有歷史解除記錄。
+        """
         uid = str(user_id)
-        if uid in self.users:
-            self.users[uid] = {
-                "penalty_level": 0,
-                "cooldown_until": 0,
-                "banned": False,
-                "total_violations": 0,
-                "unbanned_at": datetime.now().isoformat()
-            }
-            self.recent_timestamps[uid] = []
-            self.save_data()
-            return True
+        now = time.time()
+
+        user_info = self.users.get(uid, {
+            "penalty_level": 0,
+            "cooldown_until": 0,
+            "banned": False,
+            "total_violations": 0
+        })
+
+        was_banned = bool(user_info.get("banned", False) or user_info.get("penalty_level", 0) >= 5)
+        cooldown_until = user_info.get("cooldown_until", 0)
+        cooldown_rem = max(0, int(cooldown_until - now))
+        was_cooling_down = cooldown_rem > 0
+        was_restricted = was_banned or was_cooling_down
+        prev_level = user_info.get("penalty_level", 0)
+
+        # 退出當前限制模式
+        user_info["banned"] = False
+        user_info["cooldown_until"] = 0
+        user_info["penalty_level"] = 0
+
+        # 清除瞬時窗口計數，防止解封後下一秒發送又立刻觸發上一輪的滑動計數
         self.recent_timestamps[uid] = []
-        return False
+
+        # 確保並追加解除歷史紀錄，絕不刪除既有記錄
+        if "unban_history" not in user_info or not isinstance(user_info["unban_history"], list):
+            user_info["unban_history"] = []
+
+        unban_record = {
+            "unbanned_at": datetime.now().isoformat(),
+            "unbanned_by": str(unbanned_by) if unbanned_by else "開發者",
+            "previous_level": prev_level,
+            "was_banned": was_banned,
+            "was_cooling_down": was_cooling_down,
+            "cooldown_remaining_at_unban": cooldown_rem,
+            "total_violations_retained": user_info.get("total_violations", 0),
+            "reason": "指令手動解封（退出限制模式，保留違規歷史記錄）"
+        }
+        user_info["unban_history"].append(unban_record)
+        user_info["last_unbanned_at"] = unban_record["unbanned_at"]
+        user_info["unban_count"] = len(user_info["unban_history"])
+
+        self.users[uid] = user_info
+        self.save_data()
+
+        return {
+            "success": True,
+            "user_id": user_id,
+            "was_restricted": was_restricted,
+            "was_banned": was_banned,
+            "was_cooling_down": was_cooling_down,
+            "previous_level": prev_level,
+            "cooldown_remaining": cooldown_rem,
+            "total_violations": user_info.get("total_violations", 0),
+            "unban_count": len(user_info["unban_history"]),
+            "unban_history": user_info["unban_history"],
+            "last_unbanned_at": user_info["last_unbanned_at"]
+        }
+
+    def unban_user(self, user_id: int, unbanned_by: Optional[str] = None) -> bool:
+        """開發者解封用戶，退出當前限制模式並保留歷史記錄（相容舊介面）"""
+        res = self.unban_user_detailed(user_id, unbanned_by)
+        return res.get("success", False)
 
     def get_user_status(self, user_id: int) -> dict:
         """取得用戶的頻率限制狀態"""
@@ -3496,11 +3549,16 @@ class AIQuotaAbuseLimiter:
         now = time.time()
         info = self.users.get(uid, {"penalty_level": 0, "cooldown_until": 0, "banned": False, "total_violations": 0})
         cooldown_rem = max(0, int(info.get("cooldown_until", 0) - now))
+        unban_history = info.get("unban_history", [])
         return {
             "penalty_level": info.get("penalty_level", 0),
             "banned": info.get("banned", False),
             "cooldown_remaining": cooldown_rem,
-            "total_violations": info.get("total_violations", 0)
+            "total_violations": info.get("total_violations", 0),
+            "last_violation_at": info.get("last_violation_at"),
+            "last_unbanned_at": info.get("last_unbanned_at"),
+            "unban_count": len(unban_history),
+            "unban_history": unban_history
         }
 
 
@@ -7370,16 +7428,23 @@ class AIChat(commands.Cog):
             return
 
         clean_id = re.sub(r"[<@!>]", "", 用戶).strip()
+        matched_snowflakes = re.findall(r"\b\d{16,22}\b", 用戶)
+        if matched_snowflakes:
+            clean_id = matched_snowflakes[0]
+
         if not clean_id.isdigit():
             await interaction.response.send_message("❌ 請輸入正確的用戶 ID 或 @提及 用戶！", ephemeral=True)
             return
 
         target_uid = int(clean_id)
-        success = self.abuse_limiter.unban_user(target_uid)
-        if success:
-            await interaction.response.send_message(f"✅ 已成功解封用戶 `<@{target_uid}>` (`{target_uid}`) 的 AI 頻率限制，違規等級已歸零！")
-        else:
-            await interaction.response.send_message(f"ℹ️ 用戶 `<@{target_uid}>` 未處於違規紀錄中，已清除其潛在快取。", ephemeral=True)
+        detail = self.abuse_limiter.unban_user_detailed(
+            target_uid,
+            unbanned_by=f"{interaction.user.name} ({interaction.user.id})"
+        )
+        await interaction.response.send_message(
+            f"✅ 已成功解除用戶 `<@{target_uid}>` (`{target_uid}`) 的限制模式！\n"
+            f"📊 該用戶既有違規記錄（累計 **{detail['total_violations']}** 次）與歷史解除記錄（累計 **{detail['unban_count']}** 次）均已完整保留。"
+        )
 
     @ai_admin_group.command(name="伺服器上限", description="設定本伺服器每日 AI 訊息總上限（介於 200 到 2000 條）")
     @app_commands.describe(每日上限="每日全服可用總次數 (200-3000，預設 1500)")
