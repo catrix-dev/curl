@@ -16,6 +16,7 @@ import socket
 import ipaddress
 import time
 import random
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Tuple, Union
 from dotenv import load_dotenv
@@ -3254,29 +3255,35 @@ class ImageEditModal(discord.ui.Modal, title="🎨 參考圖片創作與修改 (
             await interaction.followup.send(draw_reason, ephemeral=True)
             return
 
-        ref_image_b64 = None
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(self.image_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                    if resp.status == 200:
-                        img_bytes = await resp.read()
-                        ctype = resp.headers.get("Content-Type", "image/png").split(";")[0].strip()
-                        b64 = base64.b64encode(img_bytes).decode("utf-8")
-                        ref_image_b64 = f"data:{ctype};base64,{b64}"
-        except Exception as dl_err:
-            print(f"[ImageEditModal] 下載圖片失敗: {dl_err}")
-
-        if not ref_image_b64:
-            await interaction.followup.send("❌ 無法讀取選取的圖片，請確認該圖片連結依然有效。", ephemeral=True)
-            return
-
-        user_prompt = str(self.prompt.value).strip()
-        user_style = str(self.style.value).strip() or "default"
-        user_ratio = str(self.aspect_ratio.value).strip() or "1:1"
-        if user_ratio not in {"1:1", "16:9", "9:16", "4:3", "3:2"}:
-            user_ratio = "1:1"
+        active_req = self.cog.register_active_request(
+            user_id=interaction.user.id,
+            interaction=interaction
+        )
 
         try:
+            ref_image_b64 = None
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(self.image_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                        if resp.status == 200:
+                            img_bytes = await resp.read()
+                            ctype = resp.headers.get("Content-Type", "image/png").split(";")[0].strip()
+                            b64 = base64.b64encode(img_bytes).decode("utf-8")
+                            ref_image_b64 = f"data:{ctype};base64,{b64}"
+            except Exception as dl_err:
+                print(f"[ImageEditModal] 下載圖片失敗: {dl_err}")
+
+            if not ref_image_b64:
+                await interaction.followup.send("❌ 無法讀取選取的圖片，請確認該圖片連結依然有效。", ephemeral=True)
+                active_req.is_completed = True
+                return
+
+            user_prompt = str(self.prompt.value).strip()
+            user_style = str(self.style.value).strip() or "default"
+            user_ratio = str(self.aspect_ratio.value).strip() or "1:1"
+            if user_ratio not in {"1:1", "16:9", "9:16", "4:3", "3:2"}:
+                user_ratio = "1:1"
+
             img_bytes, final_prompt, engine_name, err = await self.cog.image_engine.generate_image(
                 prompt=user_prompt,
                 style=user_style,
@@ -3287,6 +3294,7 @@ class ImageEditModal(discord.ui.Modal, title="🎨 參考圖片創作與修改 (
             if err or not img_bytes:
                 fail_msg = err if (err and str(err).startswith(("❌", "⚠️"))) else f"❌ 圖像生成失敗：{err or '未知錯誤'}"
                 await interaction.followup.send(fail_msg)
+                active_req.is_completed = True
                 return
 
             self.cog.record_usage(guild_id, interaction.user.id, config, has_image=True, is_draw=True)
@@ -3317,10 +3325,15 @@ class ImageEditModal(discord.ui.Modal, title="🎨 參考圖片創作與修改 (
             embed.set_footer(text=f"🎨 繪圖引擎: {engine_name} • 由 {user_display} 發起改圖")
 
             await interaction.followup.send(embed=embed, file=file)
-
+            active_req.is_completed = True
+        except asyncio.CancelledError:
+            return
         except Exception as e:
-            print(f"[ImageEditModal] 處理過程發生異常: {e}")
-            await interaction.followup.send(f"⚠️ 改圖處理過程發生錯誤：`{e}`")
+            if not active_req.is_failed:
+                print(f"[ImageEditModal] 處理過程發生異常: {e}")
+                await interaction.followup.send(f"⚠️ 改圖處理過程發生錯誤：`{e}`")
+        finally:
+            self.cog.unregister_active_request(active_req)
 
 
 class AIQuotaAbuseLimiter:
@@ -3491,6 +3504,59 @@ class AIQuotaAbuseLimiter:
         }
 
 
+class ActiveAIRequest:
+    """正在進行中的 AI 詢問/生圖請求追蹤物件"""
+    def __init__(
+        self,
+        user_id: int,
+        task: Optional[asyncio.Task] = None,
+        message: Optional[discord.Message] = None,
+        interaction: Optional[discord.Interaction] = None,
+        thinking_msg: Optional[discord.Message] = None
+    ):
+        self.user_id = user_id
+        self.task = task
+        self.message = message
+        self.interaction = interaction
+        self.thinking_msg = thinking_msg
+        self.is_completed = False
+        self.is_failed = False
+
+    async def fail_due_to_rate_limit(self, failure_msg: str):
+        """中止未完成的請求並顯示失敗"""
+        if self.is_completed or self.is_failed:
+            return
+        self.is_failed = True
+
+        # 1. 取消異步任務以立即中斷後台 API 呼叫與 Token 消耗
+        if self.task and not self.task.done():
+            self.task.cancel()
+
+        # 2. 更新或發送失敗訊息
+        try:
+            if self.thinking_msg:
+                try:
+                    await self.thinking_msg.edit(content=failure_msg, embed=None, attachments=[])
+                except Exception:
+                    if self.message:
+                        await self.message.reply(failure_msg)
+            elif self.interaction:
+                try:
+                    if not self.interaction.response.is_done():
+                        await self.interaction.response.send_message(failure_msg, ephemeral=True)
+                    else:
+                        await self.interaction.edit_original_response(content=failure_msg, embed=None, attachments=[])
+                except Exception:
+                    try:
+                        await self.interaction.followup.send(failure_msg, ephemeral=True)
+                    except Exception:
+                        pass
+            elif self.message:
+                await self.message.reply(failure_msg)
+        except Exception:
+            pass
+
+
 class AIChat(commands.Cog):
     """AI 聊天功能模組 (支援 OpenRouter [OpenAI / Qwen / Grok]、DeepSeek [V3 / R1]、多重人設切換與瀏覽器代理人)"""
 
@@ -3508,6 +3574,7 @@ class AIChat(commands.Cog):
         self.persona_prompt_manager = PersonaPromptManager(self.data_dir)
         self.persona_prompt_manager.preload_all()
         self.abuse_limiter = AIQuotaAbuseLimiter(self.data_dir)
+        self.active_user_requests: Dict[int, List[ActiveAIRequest]] = defaultdict(list)
 
         # 註冊右鍵訊息選單：參考此圖生成/改圖 (支援伺服器安裝與使用者個人安裝)
         self.ctx_image_edit = app_commands.ContextMenu(
@@ -3517,6 +3584,51 @@ class AIChat(commands.Cog):
             allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=True, private_channel=True)
         )
         self.bot.tree.add_command(self.ctx_image_edit)
+
+    def register_active_request(
+        self,
+        user_id: int,
+        task: Optional[asyncio.Task] = None,
+        message: Optional[discord.Message] = None,
+        interaction: Optional[discord.Interaction] = None,
+        thinking_msg: Optional[discord.Message] = None
+    ) -> ActiveAIRequest:
+        """註冊正在進行中的 AI 請求"""
+        req = ActiveAIRequest(
+            user_id=user_id,
+            task=task or asyncio.current_task(),
+            message=message,
+            interaction=interaction,
+            thinking_msg=thinking_msg
+        )
+        self.active_user_requests[user_id].append(req)
+        return req
+
+    def unregister_active_request(self, req: Optional[ActiveAIRequest]):
+        """註銷已完成或已結束的 AI 請求"""
+        if not req:
+            return
+        if req.user_id in self.active_user_requests:
+            try:
+                self.active_user_requests[req.user_id].remove(req)
+                if not self.active_user_requests[req.user_id]:
+                    del self.active_user_requests[req.user_id]
+            except (ValueError, KeyError):
+                pass
+
+    def cancel_active_requests_for_user(self, user_id: int):
+        """當用戶收到超快速發送警報時，之前他問的但是還沒回答的問題一律顯示失敗"""
+        reqs = self.active_user_requests.pop(user_id, [])
+        if not reqs:
+            return
+        failure_msg = (
+            "❌ **【回答失敗】**\n"
+            "⚠️ 檢測到您在短時間內連續超快速發送訊息（觸發防刷屏防浪費警報）！\n"
+            "系統已自動終止此問題的處理並標記為失敗。"
+        )
+        for req in reqs:
+            if not req.is_completed:
+                asyncio.create_task(req.fail_due_to_rate_limit(failure_msg))
 
     async def context_image_edit(self, interaction: discord.Interaction, message: discord.Message):
         """右鍵訊息快捷選單：參考此圖生成/改圖"""
@@ -4167,6 +4279,8 @@ class AIChat(commands.Cog):
         # 2. 頻率防刷屏與額度防浪費檢測 (超快速發送階梯處罰，冷卻中直接拒絕回答)
         allowed, abuse_msg = self.abuse_limiter.check_request(member.id)
         if not allowed:
+            # 觸發超快速發送警報或處於冷卻限制中，之前發起但尚未回答的問題一律中斷並顯示失敗
+            self.cancel_active_requests_for_user(member.id)
             return False, abuse_msg
 
         # 3. 檢查用戶是否在伺服器黑名單內
@@ -5188,10 +5302,17 @@ class AIChat(commands.Cog):
             await message.reply(reason)
             return
 
+        active_req = self.register_active_request(
+            user_id=message.author.id,
+            message=message
+        )
+
         if image_parts:
             img_allowed, img_reason = self.check_user_image_permission(message.author, config)
             if not img_allowed:
                 await message.reply(img_reason)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
 
         # 檢查自然語言切換模型意圖 (例如: '切换到grok', '換成qwen', '切換模型到deepseek r1')
@@ -5208,6 +5329,8 @@ class AIChat(commands.Cog):
             )
             if not sub_query:
                 await message.reply(embed=embed)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
             else:
                 clean_text = sub_query
@@ -5227,6 +5350,8 @@ class AIChat(commands.Cog):
             )
             if not sub_query or p_key == "help":
                 await message.reply(embed=embed)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
             else:
                 clean_text = sub_query
@@ -5259,6 +5384,8 @@ class AIChat(commands.Cog):
                     "或者直接使用 `/瀏覽器 網址:https://...` 或 `/ai 瀏覽器` 斜線指令。"
                 )
                 await message.reply(guide)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
 
             target_url = urls_in_msg[0]
@@ -5269,36 +5396,50 @@ class AIChat(commands.Cog):
                 sub_query = sub_query.replace(kw, "").strip()
 
             thinking_msg = await message.reply(f"🌐 正在啟動瀏覽器代理人檢視 `{target_url}` 中...")
-            user_display = message.author.display_name
-            system_prompt = self.build_system_prompt(guild_id, config, member=message.author)
-            eff_prov, eff_model = self.get_effective_ai(guild_id, message.author.id, config)
+            active_req.thinking_msg = thinking_msg
 
-            ai_reply, embed = await self.browser_agent.inspect_url(
-                url=target_url,
-                question=sub_query,
-                user_display=user_display,
-                system_prompt=system_prompt,
-                provider=eff_prov,
-                model=eff_model
-            )
+            try:
+                user_display = message.author.display_name
+                system_prompt = self.build_system_prompt(guild_id, config, member=message.author)
+                eff_prov, eff_model = self.get_effective_ai(guild_id, message.author.id, config)
 
-            is_error = ai_reply.startswith("⚠️") or ai_reply.startswith("❌")
-            if not is_error:
-                self.record_usage(guild_id, message.author.id, config)
-                browser_mem_user = f"[{user_display}] [瀏覽器代理人查看 {target_url}]: {sub_query or '摘要'}"
-                if is_ai_channel and message.guild:
-                    self.append_channel_memory(guild_id, message.channel.id, browser_mem_user, ai_reply)
-                else:
-                    self.append_user_memory(guild_id, message.author.id, browser_mem_user, ai_reply)
+                ai_reply, embed = await self.browser_agent.inspect_url(
+                    url=target_url,
+                    question=sub_query,
+                    user_display=user_display,
+                    system_prompt=system_prompt,
+                    provider=eff_prov,
+                    model=eff_model
+                )
 
-            await self.deliver_ai_response_message(
-                thinking_msg=thinking_msg,
-                fallback_channel=message.channel,
-                ai_reply=ai_reply,
-                embed=embed,
-                default_filename="curl_webpage_summary.txt",
-                user_prompt=clean_text
-            )
+                is_error = ai_reply.startswith("⚠️") or ai_reply.startswith("❌")
+                if not is_error:
+                    self.record_usage(guild_id, message.author.id, config)
+                    browser_mem_user = f"[{user_display}] [瀏覽器代理人查看 {target_url}]: {sub_query or '摘要'}"
+                    if is_ai_channel and message.guild:
+                        self.append_channel_memory(guild_id, message.channel.id, browser_mem_user, ai_reply)
+                    else:
+                        self.append_user_memory(guild_id, message.author.id, browser_mem_user, ai_reply)
+
+                await self.deliver_ai_response_message(
+                    thinking_msg=thinking_msg,
+                    fallback_channel=message.channel,
+                    ai_reply=ai_reply,
+                    embed=embed,
+                    default_filename="curl_webpage_summary.txt",
+                    user_prompt=clean_text
+                )
+                active_req.is_completed = True
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                if not active_req.is_failed:
+                    try:
+                        await thinking_msg.edit(content=f"⚠️ 瀏覽器代理人執行時發生錯誤：{str(e)}")
+                    except Exception:
+                        pass
+            finally:
+                self.unregister_active_request(active_req)
             return
 
         # 檢查是否觸發 AI 圖像生成 / 繪圖 / 改圖模式 (以圖生圖、圖片風格轉換、局部修改)
@@ -5314,6 +5455,8 @@ class AIChat(commands.Cog):
             draw_allowed, draw_reason = self.check_user_draw_permission(message.author, config)
             if not draw_allowed:
                 await message.reply(draw_reason)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
 
             # 支援參考圖片 (若當前訊息有附圖或引用的訊息有圖片)
@@ -5329,6 +5472,7 @@ class AIChat(commands.Cog):
                 thinking_msg = await message.reply("🎨 正在辨識參考圖片特徵並為您生成/修改圖像中，請稍候...")
             else:
                 thinking_msg = await message.reply("🎨 正在為您繪製圖像中，請稍候...")
+            active_req.thinking_msg = thinking_msg
 
             try:
                 img_bytes, final_prompt, engine_name, err = await self.image_engine.generate_image(
@@ -5339,6 +5483,7 @@ class AIChat(commands.Cog):
                 if err or not img_bytes:
                     fail_text = err if (err and str(err).startswith(("❌", "⚠️"))) else f"❌ 圖像生成失敗：{err or '未知錯誤'}"
                     await thinking_msg.edit(content=fail_text)
+                    active_req.is_completed = True
                     return
 
                 # 記錄用量與對話記憶 (累計 total_messages 與 user_draws)
@@ -5390,11 +5535,17 @@ class AIChat(commands.Cog):
                     except Exception:
                         fallback_file2 = discord.File(fp=save_path, filename=save_filename)
                         await message.reply(content=f"🎨 AI 創作完成：{raw_req}", file=fallback_file2)
+                active_req.is_completed = True
+            except asyncio.CancelledError:
+                return
             except Exception as e:
-                try:
-                    await thinking_msg.edit(content=f"⚠️ 繪圖過程發生異常：{str(e)}")
-                except Exception:
-                    pass
+                if not active_req.is_failed:
+                    try:
+                        await thinking_msg.edit(content=f"⚠️ 繪圖過程發生異常：{str(e)}")
+                    except Exception:
+                        pass
+            finally:
+                self.unregister_active_request(active_req)
             return
 
         # 檢查是否詢問機器人核心組件架構或功能清單 (例如: '你有什么功能', '你能做什么', '系统架构', '介绍你的功能')
@@ -5415,6 +5566,8 @@ class AIChat(commands.Cog):
                 self.append_channel_memory(guild_id, message.channel.id, arch_mem_user, arch_mem_ai)
             else:
                 self.append_user_memory(guild_id, message.author.id, arch_mem_user, arch_mem_ai)
+            active_req.is_completed = True
+            self.unregister_active_request(active_req)
             return
 
         # 設定提示詞文字與歷史記憶記錄字串
@@ -5465,6 +5618,7 @@ class AIChat(commands.Cog):
         try:
             async with message.channel.typing():
                 thinking_msg = await message.reply(thinking_text)
+            active_req.thinking_msg = thinking_msg
             # 準備記憶上下文 (專屬 AI 頻道使用群體記憶，普通頻道使用用戶個人記憶)
             if is_ai_channel and message.guild:
                 history = self.get_channel_memory(guild_id, message.channel.id)
@@ -5578,17 +5732,23 @@ class AIChat(commands.Cog):
                 default_filename="curl_response.txt",
                 user_prompt=clean_text
             )
+            active_req.is_completed = True
+        except asyncio.CancelledError:
+            return
         except Exception as e:
-            if thinking_msg:
-                try:
-                    await thinking_msg.edit(content=f"⚠️ 處理您的問題時發生錯誤：{str(e)}")
-                except Exception:
-                    pass
-            else:
-                try:
-                    await message.reply(f"⚠️ 處理您的問題時發生錯誤：{str(e)}")
-                except Exception:
-                    pass
+            if not active_req.is_failed:
+                if thinking_msg:
+                    try:
+                        await thinking_msg.edit(content=f"⚠️ 處理您的問題時發生錯誤：{str(e)}")
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        await message.reply(f"⚠️ 處理您的問題時發生錯誤：{str(e)}")
+                    except Exception:
+                        pass
+        finally:
+            self.unregister_active_request(active_req)
 
     # ---------------- 斜線指令組 (/ai) ----------------
 
@@ -5626,10 +5786,17 @@ class AIChat(commands.Cog):
             await interaction.followup.send(reason, ephemeral=True)
             return
 
+        active_req = self.register_active_request(
+            user_id=interaction.user.id,
+            interaction=interaction
+        )
+
         if 圖片:
             img_allowed, img_reason = self.check_user_image_permission(interaction.user, config)
             if not img_allowed:
                 await interaction.followup.send(img_reason, ephemeral=True)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
 
         # 3. 讀取用戶上傳的文字或代碼檔案
@@ -5637,9 +5804,13 @@ class AIChat(commands.Cog):
         if 檔案:
             if not is_text_attachment(檔案):
                 await interaction.followup.send("❌ 上傳的檔案不是支援的文字或代碼檔案格式（支援 .txt, .py, .json, .md, .csv, .log 等）。", ephemeral=True)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
             if 檔案.size > 2 * 1024 * 1024:
                 await interaction.followup.send("❌ 檔案過大（超過 2MB），無法直接由 AI 進行分析。", ephemeral=True)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
             try:
                 raw_bytes = await 檔案.read()
@@ -5652,6 +5823,8 @@ class AIChat(commands.Cog):
                 uploaded_file_info = (檔案.filename, f_text)
             except Exception as e:
                 await interaction.followup.send(f"❌ 讀取檔案失敗：{e}", ephemeral=True)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
 
         # 4. 檢查模型切換意圖 (如 "換成grok")
@@ -5668,6 +5841,8 @@ class AIChat(commands.Cog):
             )
             if not sub_query:
                 await interaction.followup.send(embed=embed, ephemeral=True)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
             else:
                 clean_q = sub_query
@@ -5687,6 +5862,8 @@ class AIChat(commands.Cog):
             )
             if not sub_query or p_key == "help":
                 await interaction.followup.send(embed=embed, ephemeral=True)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
             else:
                 clean_q = sub_query
@@ -5698,9 +5875,13 @@ class AIChat(commands.Cog):
         if 圖片:
             if not is_image_attachment(圖片):
                 await interaction.followup.send("❌ 上傳的檔案不是支援的圖片格式（支援 PNG, JPG, WEBP, GIF, BMP, HEIC）。", ephemeral=True)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
             if 圖片.size > 20 * 1024 * 1024:
                 await interaction.followup.send("❌ 圖片檔案過大（超過 20MB），無法上傳至 AI 辨識。", ephemeral=True)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
             try:
                 img_bytes = await 圖片.read()
@@ -5724,6 +5905,8 @@ class AIChat(commands.Cog):
                 image_name = 圖片.filename
             except Exception as e:
                 await interaction.followup.send(f"❌ 讀取圖片失敗：{e}", ephemeral=True)
+                active_req.is_completed = True
+                self.unregister_active_request(active_req)
                 return
 
         file_name = uploaded_file_info[0] if uploaded_file_info else ""
@@ -5872,11 +6055,17 @@ class AIChat(commands.Cog):
                 user_prompt=clean_q or (uploaded_file_info[0] if uploaded_file_info else ""),
                 ephemeral=not 公開回應
             )
+            active_req.is_completed = True
+        except asyncio.CancelledError:
+            return
         except Exception as e:
-            try:
-                await interaction.followup.send(f"⚠️ 處理您的問題時發生錯誤：{str(e)}", ephemeral=True)
-            except Exception:
-                pass
+            if not active_req.is_failed:
+                try:
+                    await interaction.followup.send(f"⚠️ 處理您的問題時發生錯誤：{str(e)}", ephemeral=True)
+                except Exception:
+                    pass
+        finally:
+            self.unregister_active_request(active_req)
 
     @ai_group.command(name="回答", description="💬 AI 智慧回答（支援用戶個人安裝，在未邀請此機器人的伺服器或私訊中皆可使用）")
     @app_commands.describe(
@@ -6206,6 +6395,11 @@ class AIChat(commands.Cog):
 
         await interaction.response.send_message(f"🌐 **瀏覽器代理人啟動中**，正在檢視 `{clean_url}` 並擷取內容...")
 
+        active_req = self.register_active_request(
+            user_id=interaction.user.id,
+            interaction=interaction
+        )
+
         try:
             user_display = interaction.user.display_name
             system_prompt = self.build_system_prompt(interaction.guild.id, config, member=interaction.user)
@@ -6238,11 +6432,17 @@ class AIChat(commands.Cog):
                 default_filename="curl_webpage_summary.txt",
                 user_prompt=問題 or 網址
             )
+            active_req.is_completed = True
+        except asyncio.CancelledError:
+            return
         except Exception as e:
-            try:
-                await interaction.edit_original_response(content=f"⚠️ 瀏覽器代理人執行時發生錯誤：{str(e)}")
-            except Exception:
-                pass
+            if not active_req.is_failed:
+                try:
+                    await interaction.edit_original_response(content=f"⚠️ 瀏覽器代理人執行時發生錯誤：{str(e)}")
+                except Exception:
+                    pass
+        finally:
+            self.unregister_active_request(active_req)
 
     @app_commands.command(name="瀏覽器", description="🌐 召喚瀏覽器代理人，檢視並深度分析指定網頁")
     @app_commands.describe(
@@ -6286,6 +6486,11 @@ class AIChat(commands.Cog):
             return
 
         await interaction.response.send_message(f"🔍 正在連線 DuckDuckGo 互聯網搜尋 `{clean_q}` 並整理最新資訊中...")
+
+        active_req = self.register_active_request(
+            user_id=interaction.user.id,
+            interaction=interaction
+        )
 
         try:
             search_results = await WebSearchEngine.search(clean_q, max_results=5)
@@ -6357,11 +6562,17 @@ class AIChat(commands.Cog):
                 default_filename="curl_search_results.txt",
                 user_prompt=關鍵字
             )
+            active_req.is_completed = True
+        except asyncio.CancelledError:
+            return
         except Exception as e:
-            try:
-                await interaction.edit_original_response(content=f"⚠️ 執行搜尋時發生錯誤：{str(e)}")
-            except Exception:
-                pass
+            if not active_req.is_failed:
+                try:
+                    await interaction.edit_original_response(content=f"⚠️ 執行搜尋時發生錯誤：{str(e)}")
+                except Exception:
+                    pass
+        finally:
+            self.unregister_active_request(active_req)
 
     @app_commands.command(name="搜尋", description="🔍 即時檢索互聯網最新資訊與事實，並由 AI 深度總結")
     @app_commands.describe(
@@ -6425,6 +6636,11 @@ class AIChat(commands.Cog):
 
         await interaction.response.send_message("🎨 正在啟動 AI 繪圖引擎創作中，請稍候...")
 
+        active_req = self.register_active_request(
+            user_id=interaction.user.id,
+            interaction=interaction
+        )
+
         try:
             ref_image_b64 = None
             if 參考圖片:
@@ -6449,6 +6665,7 @@ class AIChat(commands.Cog):
             if err or not img_bytes:
                 fail_msg = err if (err and str(err).startswith(("❌", "⚠️"))) else f"❌ 圖像生成失敗：{err or '未知錯誤'}"
                 await interaction.edit_original_response(content=fail_msg)
+                active_req.is_completed = True
                 return
 
             # 記錄用量與對話記憶 (累計 total_messages 與 user_draws)
@@ -6490,11 +6707,17 @@ class AIChat(commands.Cog):
                 print(f"[AI 繪圖] edit_original_response 上傳附件失敗，改以 followup 發送: {edit_err}")
                 file_fallback = discord.File(fp=save_path, filename=save_filename)
                 await interaction.followup.send(embed=embed, file=file_fallback)
+            active_req.is_completed = True
+        except asyncio.CancelledError:
+            return
         except Exception as e:
-            try:
-                await interaction.edit_original_response(content=f"⚠️ 執行繪圖時發生錯誤：{str(e)}")
-            except Exception:
-                pass
+            if not active_req.is_failed:
+                try:
+                    await interaction.edit_original_response(content=f"⚠️ 執行繪圖時發生錯誤：{str(e)}")
+                except Exception:
+                    pass
+        finally:
+            self.unregister_active_request(active_req)
 
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
