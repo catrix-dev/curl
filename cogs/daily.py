@@ -133,7 +133,7 @@ class Daily(commands.Cog):
         # 觸發成就檢查
         achievements_cog = self.bot.get_cog("Achievements")
         if achievements_cog:
-            asyncio.create_task(achievements_cog.check_achievements(interaction.user, interaction.guild, "daily", streak_val))
+            asyncio.create_task(achievements_cog.check_achievements(interaction.guild.id, interaction.user.id))
         
         # 創建嵌入訊息
         embed = discord.Embed(

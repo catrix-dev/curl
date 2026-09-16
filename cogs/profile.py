@@ -69,15 +69,22 @@ class Profile(commands.Cog):
                 levels_data = json.load(f)
                 user_key = str(user_id)
                 if user_key in levels_data:
-                    stats['level'] = levels_data[user_key].get('level', 0)
-                    stats['xp'] = levels_data[user_key].get('xp', 0)
-                    stats['total_xp'] = levels_data[user_key].get('total_xp', 0)
-                    stats['messages'] = levels_data[user_key].get('messages', 0)
+                    u_data = levels_data[user_key]
+                    lvl = u_data.get('level', 1)
+                    tot_xp = u_data.get('total_xp', u_data.get('xp', 0))
+                    
+                    req_before = sum(100 + (l - 1) * 50 for l in range(1, lvl))
+                    xp_in_level = max(0, tot_xp - req_before)
+                    
+                    stats['level'] = lvl
+                    stats['xp'] = xp_in_level
+                    stats['total_xp'] = tot_xp
+                    stats['messages'] = u_data.get('messages', 0)
                     
                     # 計算排名
                     sorted_users = sorted(
                         levels_data.items(),
-                        key=lambda x: x[1].get('total_xp', 0),
+                        key=lambda x: x[1].get('total_xp', x[1].get('xp', 0)),
                         reverse=True
                     )
                     for idx, (uid, _) in enumerate(sorted_users, 1):
@@ -92,8 +99,11 @@ class Profile(commands.Cog):
                 game_data = json.load(f)
                 user_key = str(user_id)
                 if user_key in game_data:
-                    stats['game_wins'] = game_data[user_key].get('wins', 0)
-                    stats['game_losses'] = game_data[user_key].get('losses', 0)
+                    u_game = game_data[user_key]
+                    total_wins = u_game.get('total_wins', u_game.get('wins', 0))
+                    total_games = u_game.get('total_games', 0)
+                    stats['game_wins'] = total_wins
+                    stats['game_losses'] = max(0, total_games - total_wins) if total_games >= total_wins else u_game.get('losses', 0)
         
         # 獲取簽到數據
         daily_file = os.path.join(self.data_folder, str(guild_id), 'daily.json')

@@ -231,10 +231,9 @@ class Updater(commands.Cog):
         print(f"\n   ✅ 成功: {success_count} 個文件")
         if fail_count > 0:
             print(f"   ❌ 失敗: {fail_count} 個文件")
-            if success_count == 0:
-                print("   ⚠️ 所有文件更新失敗，取消更新與重啟。")
-                print("─" * 62)
-                return
+            print("   ⚠️ 更新過程中存在失敗文件，為保障系統穩定，取消本次更新與重啟。")
+            print("─" * 62)
+            return
         
         # 更新本地版本號
         try:

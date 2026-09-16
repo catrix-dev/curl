@@ -255,7 +255,7 @@ class Leveling(commands.Cog):
             # 觸發等級成就檢查
             achievements_cog = self.bot.get_cog("Achievements")
             if achievements_cog:
-                asyncio.create_task(achievements_cog.check_achievements(message.author, message.guild, "level", new_level))
+                asyncio.create_task(achievements_cog.check_achievements(message.guild.id, message.author.id))
         
     @commands.Cog.listener()
     async def on_ready(self):

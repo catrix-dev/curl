@@ -5,6 +5,7 @@ import json
 import os
 from datetime import datetime
 import asyncio
+import html
 
 class Tickets(commands.Cog):
     """客服單系統"""
@@ -181,38 +182,43 @@ class Tickets(commands.Cog):
         # 格式化時間
         timestamp = message.created_at.strftime('%Y-%m-%d %H:%M:%S')
         
-        # 處理消息內容
-        content = message.content.replace('<', '&lt;').replace('>', '&gt;')
-        
+        # 處理消息內容與各欄位 HTML 轉義，杜絕 XSS
+        clean_content = message.clean_content or message.content or ""
+        safe_content = html.escape(clean_content)
+        safe_author_name = html.escape(str(message.author.name or "未知用戶"))
+        safe_avatar_url = html.escape(avatar_url)
+
         message_html = f'''
             <div class="message">
-                <img src="{avatar_url}" alt="Avatar" class="avatar">
+                <img src="{safe_avatar_url}" alt="Avatar" class="avatar">
                 <div class="message-content">
                     <div class="message-header">
-                        <span class="username">{message.author.name}</span>
+                        <span class="username">{safe_author_name}</span>
                         <span class="timestamp">{timestamp}</span>
                     </div>
 '''
-        
-        if content:
-            message_html += f'                    <div class="text">{content}</div>\n'
-        
+
+        if safe_content:
+            message_html += f'                    <div class="text">{safe_content}</div>\n'
+
         # 處理附件
         for attachment in message.attachments:
+            safe_att_url = html.escape(attachment.url)
+            safe_att_name = html.escape(attachment.filename)
             if attachment.content_type and attachment.content_type.startswith('image/'):
-                message_html += f'                    <div class="attachment"><img src="{attachment.url}" alt="附件"></div>\n'
+                message_html += f'                    <div class="attachment"><img src="{safe_att_url}" alt="附件"></div>\n'
             else:
-                message_html += f'                    <div class="attachment"><a href="{attachment.url}">{attachment.filename}</a></div>\n'
-        
+                message_html += f'                    <div class="attachment"><a href="{safe_att_url}">{safe_att_name}</a></div>\n'
+
         # 處理嵌入
         for embed in message.embeds:
             message_html += '                    <div class="embed">\n'
             if embed.title:
-                message_html += f'                        <strong>{embed.title}</strong><br>\n'
+                message_html += f'                        <strong>{html.escape(str(embed.title))}</strong><br>\n'
             if embed.description:
-                message_html += f'                        {embed.description}<br>\n'
+                message_html += f'                        {html.escape(str(embed.description))}<br>\n'
             message_html += '                    </div>\n'
-        
+
         message_html += '''
                 </div>
             </div>
@@ -462,7 +468,8 @@ class Tickets(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         
         # 獲取分類
-        category = interaction.guild.get_channel(int(data['category_id']))
+        cat_id = data.get('category_id')
+        category = interaction.guild.get_channel(int(cat_id)) if cat_id and str(cat_id).isdigit() else None
         if not category:
             await interaction.followup.send("❌ 找不到客服單分類，請聯繫管理員", ephemeral=True)
             return
@@ -479,8 +486,9 @@ class Tickets(commands.Cog):
         }
         
         # 添加支持角色權限
-        if data['support_role_id']:
-            support_role = interaction.guild.get_role(int(data['support_role_id']))
+        sup_id = data.get('support_role_id')
+        if sup_id and str(sup_id).isdigit():
+            support_role = interaction.guild.get_role(int(sup_id))
             if support_role:
                 overwrites[support_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
         
@@ -524,9 +532,14 @@ class Tickets(commands.Cog):
         # 創建關閉按鈕視圖
         close_view = CloseTicketView(self, ticket_id, str(interaction.user.id))
         
+        role_mention = ""
+        if sup_id and str(sup_id).isdigit():
+            s_role = interaction.guild.get_role(int(sup_id))
+            if s_role:
+                role_mention = f" {s_role.mention}"
+
         await channel.send(
-            content=f"{interaction.user.mention}" + 
-                   (f" {interaction.guild.get_role(int(data['support_role_id'])).mention}" if data['support_role_id'] else ""),
+            content=f"{interaction.user.mention}{role_mention}",
             embed=embed,
             view=close_view
         )
@@ -534,8 +547,9 @@ class Tickets(commands.Cog):
         await interaction.followup.send(f"✅ 已創建客服單: {channel.mention}", ephemeral=True)
         
         # 記錄到日誌
-        if data['log_channel_id']:
-            log_channel = interaction.guild.get_channel(int(data['log_channel_id']))
+        log_cid = data.get('log_channel_id')
+        if log_cid and str(log_cid).isdigit():
+            log_channel = interaction.guild.get_channel(int(log_cid))
             if log_channel:
                 log_embed = discord.Embed(
                     title="📋 新客服單",

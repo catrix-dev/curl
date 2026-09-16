@@ -1,8 +1,8 @@
-# curl Discord Bot (v7.1.0)
+# curl Discord Bot (v7.1.1)
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-v7.1.0-blue.svg)](https://github.com/catrix-dev/curl)
+[![Version](https://img.shields.io/badge/version-v7.1.1-blue.svg)](https://github.com/catrix-dev/curl)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Discord.py](https://img.shields.io/badge/discord.py-2.0%2B-green.svg)](https://github.com/Rapptz/discord.py)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
@@ -17,7 +17,7 @@
 
 ---
 
-## 🌟 核心特色 (v7.1.0)
+## 🌟 核心特色 (v7.1.1)
 
 - 🤖 **AI 智慧聊天系統**：
   - 支援多模型架構：Google Gemini (Gemini 2.0 Flash / Flash Lite)、OpenRouter（Claude 3.5 Sonnet / Gemini 2.0 備援）、DeepSeek (V3-Chat / Reasoner)。

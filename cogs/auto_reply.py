@@ -12,32 +12,45 @@ class AutoReply(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.data_folder = './data'
+        self._rules_cache = {}  # {guild_id_str: rules_dict}
     
     def get_auto_reply_file(self, guild_id):
         """獲取自動回覆數據文件路徑"""
         return os.path.join(self.data_folder, str(guild_id), 'auto_reply.json')
     
     def load_auto_replies(self, guild_id):
-        """載入自動回覆規則"""
+        """載入自動回覆規則（優先記憶體快取，避免每條訊息讀盤）"""
+        guild_id_str = str(guild_id)
+        if guild_id_str in self._rules_cache:
+            return self._rules_cache[guild_id_str]
+
         file_path = self.get_auto_reply_file(guild_id)
         
         if not os.path.exists(file_path):
-            return {
+            data = {
                 'enabled': True,
                 'rules': []
             }
+            self._rules_cache[guild_id_str] = data
+            return data
         
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            return {
+                data = json.load(f)
+                self._rules_cache[guild_id_str] = data
+                return data
+        except Exception:
+            data = {
                 'enabled': True,
                 'rules': []
             }
+            self._rules_cache[guild_id_str] = data
+            return data
     
     def save_auto_replies(self, guild_id, data):
-        """保存自動回覆規則"""
+        """保存自動回覆規則（同步更新快取與原子寫入磁碟）"""
+        guild_id_str = str(guild_id)
+        self._rules_cache[guild_id_str] = data
         file_path = self.get_auto_reply_file(guild_id)
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         tmp_file = file_path + f".tmp_{os.getpid()}"

@@ -217,7 +217,7 @@ class Birthday(commands.Cog):
             timestamp=discord.utils.utcnow()
         )
         
-        for user_id, bd in month_birthdays:
+        for user_id, bd in month_birthdays[:25]:
             try:
                 uid = int(user_id)
                 user = interaction.guild.get_member(uid) if interaction.guild else None
@@ -232,6 +232,9 @@ class Birthday(commands.Cog):
                 )
             except:
                 continue
+        
+        if len(month_birthdays) > 25:
+            embed.set_footer(text=f"顯示前 25/{len(month_birthdays)} 位壽星")
         
         await interaction.followup.send(embed=embed)
     

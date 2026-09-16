@@ -176,7 +176,7 @@ class CustomCommands(commands.Cog):
             timestamp=discord.utils.utcnow()
         )
         
-        for cmd_name, cmd_data in sorted(commands.items()):
+        for cmd_name, cmd_data in sorted(commands.items())[:25]:
             uses = cmd_data.get('uses', 0)
             response_preview = cmd_data['response'][:50]
             if len(cmd_data['response']) > 50:
@@ -188,7 +188,10 @@ class CustomCommands(commands.Cog):
                 inline=False
             )
         
-        embed.set_footer(text="使用 !命令名稱 來觸發自定義命令")
+        if len(commands) > 25:
+            embed.set_footer(text=f"顯示前 25/{len(commands)} 個命令 | 使用 !命令名稱 來觸發自定義命令")
+        else:
+            embed.set_footer(text="使用 !命令名稱 來觸發自定義命令")
         
         await interaction.response.send_message(embed=embed)
     

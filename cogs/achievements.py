@@ -223,8 +223,42 @@ class Achievements(commands.Cog):
         
         return False
     
-    async def check_achievements(self, guild_id: int, user_id: int):
-        """檢查並解鎖成就"""
+    async def check_achievements(self, *args, **kwargs):
+        """檢查並解鎖成就（多型相容支援 (guild_id, user_id) 或 (member, guild, ...) 調用）"""
+        guild_id = None
+        user_id = None
+        if len(args) >= 2:
+            first, second = args[0], args[1]
+            if hasattr(first, "guild") and hasattr(first, "id"):
+                user_id = first.id
+                guild_id = second.id if hasattr(second, "id") else int(second)
+            elif hasattr(second, "guild") and hasattr(second, "id"):
+                guild_id = first.id if hasattr(first, "id") else int(first)
+                user_id = second.id
+            elif hasattr(first, "id") and hasattr(second, "id"):
+                if isinstance(first, discord.Guild):
+                    guild_id = first.id
+                    user_id = second.id
+                else:
+                    user_id = first.id
+                    guild_id = second.id
+            else:
+                try:
+                    guild_id = int(first)
+                    user_id = int(second)
+                except (ValueError, TypeError):
+                    pass
+        if guild_id is None:
+            guild_id = kwargs.get("guild_id")
+        if user_id is None:
+            user_id = kwargs.get("user_id")
+
+        if not guild_id or not user_id:
+            return []
+
+        guild_id = int(guild_id)
+        user_id = int(user_id)
+
         # 獲取用戶統計
         stats = {}
         

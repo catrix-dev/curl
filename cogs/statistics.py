@@ -1,6 +1,6 @@
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 import os
 import json
 from datetime import datetime, timedelta
@@ -12,6 +12,28 @@ class Statistics(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.message_cache = defaultdict(list)  # 臨時緩存，用於活躍度分析
+        self._stats_cache = {}  # {guild_id: stats_dict}
+        self._dirty_guilds = set()
+        self.flush_loop.start()
+    
+    @tasks.loop(seconds=60)
+    async def flush_loop(self):
+        """定時將記憶體累計的統計數據非同步刷盤"""
+        self.flush_all_stats()
+
+    def flush_all_stats(self):
+        """將所有髒資料原子寫入磁碟"""
+        if not self._dirty_guilds:
+            return
+        guild_ids = list(self._dirty_guilds)
+        self._dirty_guilds.clear()
+        for g_id in guild_ids:
+            if g_id in self._stats_cache:
+                self.save_stats(g_id, self._stats_cache[g_id])
+
+    def cog_unload(self):
+        self.flush_loop.cancel()
+        self.flush_all_stats()
     
     def get_stats_file(self, guild_id: int):
         """獲取統計文件路徑"""
@@ -21,14 +43,21 @@ class Statistics(commands.Cog):
         return os.path.join(data_dir, 'statistics.json')
     
     def load_stats(self, guild_id: int):
-        """載入統計數據"""
+        """載入統計數據（優先記憶體快取）"""
+        if guild_id in self._stats_cache:
+            return self._stats_cache[guild_id]
+
         file_path = self.get_stats_file(guild_id)
-        
         if os.path.exists(file_path):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self._stats_cache[guild_id] = data
+                    return data
+            except Exception:
+                pass
         
-        return {
+        data = {
             'total_messages': 0,
             'daily_messages': {},
             'channel_stats': {},
@@ -36,14 +65,24 @@ class Statistics(commands.Cog):
             'hourly_activity': {str(i): 0 for i in range(24)},
             'last_updated': datetime.now().isoformat()
         }
+        self._stats_cache[guild_id] = data
+        return data
     
     def save_stats(self, guild_id: int, data: dict):
-        """儲存統計數據"""
+        """儲存統計數據（原子寫入）"""
         file_path = self.get_stats_file(guild_id)
         data['last_updated'] = datetime.now().isoformat()
-        
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        tmp_file = f"{file_path}.tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_file, file_path)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
     
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -105,8 +144,8 @@ class Statistics(commands.Cog):
             stats['hourly_activity'] = {str(i): 0 for i in range(24)}
         stats['hourly_activity'][hour] = stats['hourly_activity'].get(hour, 0) + 1
         
-        # 儲存統計數據
-        self.save_stats(guild_id, stats)
+        # 標記需要定時刷盤（防止高頻磁碟 I/O 阻塞）
+        self._dirty_guilds.add(guild_id)
     
     # 創建統計指令群組
     stats_group = app_commands.Group(name="統計", description="統計分析系統")
@@ -308,11 +347,12 @@ class Statistics(commands.Cog):
     @stats_group.command(name="活躍排行", description="查看最活躍用戶排行榜")
     async def active_users(self, interaction: discord.Interaction):
         """活躍用戶排行榜"""
+        await interaction.response.defer()
         stats = self.load_stats(interaction.guild.id)
         user_stats = stats.get('user_stats', {})
         
         if not user_stats:
-            await interaction.response.send_message("❌ 還沒有用戶統計數據", ephemeral=True)
+            await interaction.followup.send("❌ 還沒有用戶統計數據", ephemeral=True)
             return
         
         # 排序用戶
@@ -337,12 +377,17 @@ class Statistics(commands.Cog):
             medal = medals[i] if i < 3 else f"**{i+1}.**"
             percentage = (data['messages'] / total_messages * 100) if total_messages > 0 else 0
             
-            # 嘗試獲取用戶
-            try:
-                user = await self.bot.fetch_user(int(user_id))
-                username = user.display_name
-            except:
-                username = data.get('username', '未知用戶')
+            # 嘗試獲取用戶（優先 Guild 本地快取）
+            uid_int = int(user_id)
+            member = interaction.guild.get_member(uid_int) if interaction.guild else None
+            if member:
+                username = member.display_name
+            else:
+                try:
+                    user = await self.bot.fetch_user(uid_int)
+                    username = user.display_name
+                except Exception:
+                    username = data.get('username', '未知用戶')
             
             bar_length = int(percentage / 5)  # 每5%一個方塊
             bar = "█" * bar_length + "░" * (20 - bar_length)
@@ -353,7 +398,7 @@ class Statistics(commands.Cog):
         embed.description = leaderboard_text
         embed.set_footer(text="統計數據更新於")
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
     
     @stats_group.command(name="時段分析", description="查看24小時活躍度分析")
     async def hourly_analysis(self, interaction: discord.Interaction):

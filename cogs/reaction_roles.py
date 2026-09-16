@@ -195,17 +195,23 @@ class ReactionRoles(commands.Cog):
             color=discord.Color.blue()
         )
         
-        for message_id, info in data.items():
+        items = list(data.items())
+        for message_id, info in items[:25]:
             roles_text = "\n".join([
                 f"{emoji} → <@&{role_id}>"
                 for emoji, role_id in info["roles"].items()
             ])
+            if len(roles_text) > 900:
+                roles_text = roles_text[:900] + "\n..."
             
             embed.add_field(
                 name=f"訊息 ID: {message_id}",
-                value=f"頻道: <#{info['channel_id']}>\n{roles_text}",
+                value=f"頻道: <#{info.get('channel_id', '未知')}>\n{roles_text or '無'}",
                 inline=False
             )
+        
+        if len(items) > 25:
+            embed.set_footer(text=f"顯示前 25/{len(items)} 條反應角色訊息")
         
         await interaction.response.send_message(embed=embed)
     

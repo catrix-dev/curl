@@ -12,6 +12,8 @@ import base64
 import html
 import urllib
 import urllib.parse
+import socket
+import ipaddress
 import time
 import random
 from datetime import datetime, timezone, timedelta
@@ -31,15 +33,52 @@ SUPPORTED_TEXT_EXTENSIONS = {
     ".env", ".cfg", ".conf", ".r", ".lua", ".swift", ".kt"
 }
 
-def is_image_attachment(att: discord.Attachment) -> bool:
-    """判斷附件是否為支援的圖片格式"""
-    if getattr(att, "width", None) is not None and getattr(att, "height", None) is not None:
+def is_safe_external_url(url: str) -> bool:
+    """SSRF 防護：嚴格檢查 URL 是否為合法的外部公網 HTTP/HTTPS 位址，防禦內網探測與回環繞過"""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme.lower() not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        clean_host = hostname.strip().lower()
+        if clean_host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+        if clean_host.endswith((".local", ".internal", ".lan", ".home")):
+            return False
+
+        try:
+            ip = ipaddress.ip_address(clean_host)
+            if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+                return False
+        except ValueError:
+            try:
+                addr_info = socket.getaddrinfo(clean_host, None)
+                for item in addr_info:
+                    sockaddr = item[4]
+                    resolved_ip_str = sockaddr[0]
+                    resolved_ip = ipaddress.ip_address(resolved_ip_str)
+                    if resolved_ip.is_loopback or resolved_ip.is_private or resolved_ip.is_link_local or resolved_ip.is_reserved or resolved_ip.is_multicast or resolved_ip.is_unspecified:
+                        return False
+            except Exception:
+                pass
         return True
+    except Exception:
+        return False
+
+def is_image_attachment(att: discord.Attachment) -> bool:
+    """判斷附件是否為支援的圖片格式（排除影片）"""
+    ext = os.path.splitext(getattr(att, "filename", ""))[1].lower()
+    video_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv", ".m4v"}
+    if ext in video_exts:
+        return False
     if getattr(att, "content_type", None):
         mime = att.content_type.split(";")[0].strip().lower()
+        if mime.startswith("video/"):
+            return False
         if mime in SUPPORTED_IMAGE_MIMES or mime.startswith("image/"):
             return True
-    ext = os.path.splitext(getattr(att, "filename", ""))[1].lower()
     return ext in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".heic"}
 
 def is_text_attachment(att: discord.Attachment) -> bool:
@@ -881,7 +920,8 @@ class UnifiedAIClient:
                         if part.get("type") == "text":
                             total += len(part.get("text", ""))
                         elif part.get("type") == "image_url":
-                            total += len(part.get("image_url", {}).get("url", ""))
+                            # Base64 數據體積龐大，使用等效多模態 Token 權重（3000 虛擬字元）避免對話歷史被排空
+                            total += 3000
                 return total
             return 0
 
@@ -1179,33 +1219,37 @@ PERSONA_CONFIGS = {
 
 class PersonaPromptManager:
     """人格 Prompt 檔案載入與熱重載管理器
-    依序自多個搜尋目錄讀取 /data/ai-prompt/<人格名稱>.json 或 ./data/ai-prompt/<人格名稱>.json，
+    依序自多個搜尋目錄讀取 ./cogs/ai-prompt/<人格英文名稱>.json，
     並依據檔案 mtime 自動熱重載，確保修改 JSON 設定檔後無需重啟 Bot 立即生效。
     """
     SEARCH_DIRS = [
-        "/data/ai-prompt",
-        os.path.abspath("./data/ai-prompt"),
-        "./data/ai-prompt",
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "ai-prompt")),
+        os.path.abspath("./cogs/ai-prompt"),
+        "./cogs/ai-prompt",
     ]
 
     NAME_MAPPINGS = {
         "cute_cat": ["cute_cat", "可愛貓貓", "可爱猫猫"],
+        "可愛貓貓": ["cute_cat", "可愛貓貓", "可爱猫猫"],
+        "可爱猫猫": ["cute_cat", "可愛貓貓", "可爱猫猫"],
         "normal": ["normal", "一般"],
-        "engineer": ["engineer", "頂級工程師", "顶级工程师"],
+        "一般": ["normal", "一般"],
+        "engineer": ["engineer", "頂級工程師", "顶级工程师", "工程師", "工程师"],
+        "頂級工程師": ["engineer", "頂級工程師", "顶级工程师", "工程師", "工程师"],
+        "顶级工程师": ["engineer", "頂級工程師", "顶级工程师", "工程師", "工程师"],
+        "工程師": ["engineer", "頂級工程師", "顶级工程师", "工程師", "工程师"],
+        "工程师": ["engineer", "頂級工程師", "顶级工程师", "工程師", "工程师"],
         "catgirl": ["catgirl", "貓娘", "猫娘"],
+        "貓娘": ["catgirl", "貓娘", "猫娘"],
+        "猫娘": ["catgirl", "貓娘", "猫娘"],
     }
 
     def __init__(self, data_dir: str = "./data"):
         self.data_dir = data_dir
         self._cache: Dict[str, Dict[str, Any]] = {}
-        custom_dir = os.path.abspath(os.path.join(data_dir, "ai-prompt"))
-        if custom_dir not in self.SEARCH_DIRS:
-            self.SEARCH_DIRS.insert(0, custom_dir)
-        # 確保專案內 data/ai-prompt 目錄存在
-        try:
-            os.makedirs(os.path.join(data_dir, "ai-prompt"), exist_ok=True)
-        except Exception:
-            pass
+        cog_prompt_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "ai-prompt"))
+        if cog_prompt_dir not in self.SEARCH_DIRS:
+            self.SEARCH_DIRS.insert(0, cog_prompt_dir)
 
     def find_file(self, persona_key: str) -> Optional[str]:
         aliases = self.NAME_MAPPINGS.get(persona_key, [persona_key])
@@ -1707,6 +1751,10 @@ class BrowserAgent:
             owner, repo, rest = github_blob_match.groups()
             fetch_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{rest}"
 
+        if not is_safe_external_url(fetch_url):
+            result["error"] = "拒絕訪問不安全的內部或私有位址 (SSRF 防護)"
+            return result
+
         connector = aiohttp.TCPConnector(ssl=False)
         try:
             timeout = aiohttp.ClientTimeout(total=15, connect=7)
@@ -1717,7 +1765,21 @@ class BrowserAgent:
                         result["error"] = f"HTTP 狀態碼 {resp.status}"
                         return result
 
-                    content_bytes = await resp.read()
+                    # 10MB 讀取上限防護，避免 OOM
+                    max_bytes = 10 * 1024 * 1024
+                    clength = resp.headers.get("Content-Length")
+                    if clength and int(clength) > max_bytes:
+                        result["error"] = "網頁內容超過 10MB 上限"
+                        return result
+
+                    content_chunks = []
+                    total_read = 0
+                    async for chunk in resp.content.iter_chunked(64 * 1024):
+                        total_read += len(chunk)
+                        if total_read > max_bytes:
+                            break
+                        content_chunks.append(chunk)
+                    content_bytes = b"".join(content_chunks)
                     charset = resp.charset
                     if not charset:
                         meta_charset = re.search(r'<meta[^>]+charset=["\']?([a-zA-Z0-9_-]+)', content_bytes[:2048].decode("ascii", errors="ignore"), re.IGNORECASE)
@@ -1932,7 +1994,7 @@ class BotArchitectureService:
 
         # 取得當前有效 AI 提供者與模型
         eff_prov = "openrouter"
-        eff_model = "google/gemini-2.5-flash"
+        eff_model = "google/gemini-2.0-flash-001"
         active_persona = "cute_cat"
 
         if ai_chat_cog:
@@ -2216,8 +2278,7 @@ class ImageGenerationEngine:
             self.image_models = [m.strip() for m in models_env.split(",") if m.strip()]
         else:
             self.image_models = [
-                "google/gemini-2.0-flash-001",
-                "anthropic/claude-3.5-sonnet"
+                "google/gemini-2.0-flash-001"
             ]
         if self.image_model and self.image_model not in self.image_models:
             self.image_models.insert(0, self.image_model)
@@ -2614,7 +2675,7 @@ class ImageGenerationEngine:
                         self.openrouter.generate_response(
                             messages=messages,
                             system_prompt=vision_sys_prompt,
-                            model="google/gemini-2.5-flash",
+                            model="google/gemini-2.0-flash-001",
                             enable_web_search=False
                         ),
                         timeout=4.5
@@ -2680,7 +2741,7 @@ class ImageGenerationEngine:
                     self.openrouter.generate_response(
                         messages=[{"role": "user", "content": user_content}],
                         system_prompt=text_sys_prompt,
-                        model="google/gemini-2.5-flash",
+                        model="google/gemini-2.0-flash-001",
                         enable_web_search=False
                     ),
                     timeout=3.5
@@ -2789,8 +2850,7 @@ class ImageGenerationEngine:
                     message_content = f"Generate a high-quality image: {final_prompt}"
 
                 gemini_openrouter_models = [m for m in self.image_models if m] or [
-                    "google/gemini-2.0-flash-001",
-                    "anthropic/claude-3.5-sonnet"
+                    "google/gemini-2.0-flash-001"
                 ]
 
                 for api_key in api_keys:
@@ -3305,7 +3365,7 @@ class AIChat(commands.Cog):
         user_model = config.get("user_ai_models", {}).get(user_id_str)
 
         guild_prov = config.get("ai_provider", os.getenv("AI_PROVIDER", "openrouter"))
-        guild_model = config.get("ai_model", os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash"))
+        guild_model = config.get("ai_model", os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001"))
 
         effective_prov = user_prov or guild_prov
         effective_model = user_model or guild_model
@@ -3635,16 +3695,16 @@ class AIChat(commands.Cog):
         if "ai_channel_id" in data:
             del data["ai_channel_id"]
             needs_save = True
-        if data.get("daily_limit") in (500, None) or (isinstance(data.get("daily_limit"), int) and data.get("daily_limit") < 1500):
+        if data.get("daily_limit") is None:
             data["daily_limit"] = 1500
             needs_save = True
-        if data.get("default_role_limit") in (80, 20, None) or (isinstance(data.get("default_role_limit"), int) and data.get("default_role_limit") < 85):
+        if data.get("default_role_limit") is None:
             data["default_role_limit"] = 85
             needs_save = True
-        if data.get("default_image_limit") in (10, None) or (isinstance(data.get("default_image_limit"), int) and data.get("default_image_limit") < 25):
+        if data.get("default_image_limit") is None:
             data["default_image_limit"] = 25
             needs_save = True
-        if "default_draw_limit" not in data or data.get("default_draw_limit") != 10:
+        if data.get("default_draw_limit") is None:
             data["default_draw_limit"] = 10
             needs_save = True
         if "draw_role_limits" not in data:
@@ -3989,8 +4049,10 @@ class AIChat(commands.Cog):
 
     def record_usage(self, guild_id: int, user_id: int, config: dict, has_image: bool = False, is_draw: bool = False):
         """記錄並增加伺服器及用戶的使用次數（支援文字、圖片與生圖分別累計）"""
+        # 重新載入最新配置，防止多協程或 Web 控制台變更被長耗時請求結束時的舊 config 物件覆蓋
+        fresh_config = self.load_config(guild_id)
         today = datetime.now().strftime("%Y-%m-%d")
-        daily_usage = config.get("daily_usage", {})
+        daily_usage = fresh_config.get("daily_usage", {})
         if daily_usage.get("date") != today:
             daily_usage = {"date": today, "total_messages": 0, "users": {}, "user_images": {}, "user_draws": {}}
 
@@ -4007,8 +4069,10 @@ class AIChat(commands.Cog):
             draws_map = daily_usage.setdefault("user_draws", {})
             draws_map[user_id_str] = draws_map.get(user_id_str, 0) + 1
 
+        fresh_config["daily_usage"] = daily_usage
+        self.save_config(guild_id, fresh_config)
+        # 同步更新傳入的引用
         config["daily_usage"] = daily_usage
-        self.save_config(guild_id, config)
 
     def build_system_prompt(self, guild_id: int, config: dict, member: Optional[Union[discord.Member, discord.User]] = None) -> str:
         """結合開發者初始 prompt、開發者核心持久記憶 與 伺服器專屬自訂 prompt"""
@@ -4361,15 +4425,24 @@ class AIChat(commands.Cog):
                         continue
 
                     # 一般 HTTP/HTTPS 圖片下載
+                    if not is_safe_external_url(img_url):
+                        continue
                     try:
                         async with aiohttp.ClientSession() as session:
                             async with session.get(img_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                                 if resp.status == 200:
                                     clength = resp.headers.get("Content-Length")
-                                    if clength and int(clength) > 15 * 1024 * 1024:
+                                    if clength and int(clength) > 10 * 1024 * 1024:
                                         continue
-                                    img_bytes = await resp.read()
-                                    if len(img_bytes) > 15 * 1024 * 1024:
+                                    img_chunks = []
+                                    tot_r = 0
+                                    async for chunk in resp.content.iter_chunked(64 * 1024):
+                                        tot_r += len(chunk)
+                                        if tot_r > 10 * 1024 * 1024:
+                                            break
+                                        img_chunks.append(chunk)
+                                    img_bytes = b"".join(img_chunks)
+                                    if len(img_bytes) > 10 * 1024 * 1024 or len(img_bytes) < 100:
                                         continue
                                     ctype = resp.headers.get("Content-Type", "image/png").split(";")[0].strip()
                                     if not ctype.startswith("image/"):
@@ -4411,11 +4484,25 @@ class AIChat(commands.Cog):
             for txt in text_sources:
                 urls = img_url_pattern.findall(txt)
                 for u in urls:
+                    if not is_safe_external_url(u):
+                        continue
                     try:
                         async with aiohttp.ClientSession() as session:
                             async with session.get(u, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                                 if resp.status == 200:
-                                    img_bytes = await resp.read()
+                                    clength = resp.headers.get("Content-Length")
+                                    if clength and int(clength) > 10 * 1024 * 1024:
+                                        continue
+                                    img_chunks = []
+                                    tot_r = 0
+                                    async for chunk in resp.content.iter_chunked(64 * 1024):
+                                        tot_r += len(chunk)
+                                        if tot_r > 10 * 1024 * 1024:
+                                            break
+                                        img_chunks.append(chunk)
+                                    img_bytes = b"".join(img_chunks)
+                                    if len(img_bytes) > 10 * 1024 * 1024 or len(img_bytes) < 100:
+                                        continue
                                     ctype = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
                                     if not ctype.startswith("image/"):
                                         ctype = "image/jpeg"
@@ -4595,7 +4682,8 @@ class AIChat(commands.Cog):
         ai_reply: str,
         embed: Optional[discord.Embed] = None,
         default_filename: str = "curl_response.txt",
-        user_prompt: str = ""
+        user_prompt: str = "",
+        ephemeral: Optional[bool] = None
     ):
         """將 AI 回應交付至 Interaction，若有附件或長度超過 2000 字則轉為 .txt 檔案附件"""
         clean_text, files = self.extract_files_from_ai_reply(ai_reply)
@@ -4629,7 +4717,8 @@ class AIChat(commands.Cog):
                     if hasattr(f, "fp") and hasattr(f.fp, "seek"):
                         f.fp.seek(0)
                 await interaction.edit_original_response(content="✅ 回應已生成，請見下方訊息：")
-                await interaction.followup.send(content=clean_text, embed=embed, files=files if files else None)
+                is_eph = ephemeral if ephemeral is not None else False
+                await interaction.followup.send(content=clean_text, embed=embed, files=files if files else None, ephemeral=is_eph)
             except Exception as e2:
                 print(f"[AI] followup.send 亦失敗: {e2}")
 
@@ -4654,6 +4743,8 @@ class AIChat(commands.Cog):
     def is_missing_data_reply(cls, reply: str) -> bool:
         """檢測 AI 回應是否包含『資料庫沒有此資訊 / 我不知道 / 查無此項』等消極內容"""
         if not reply or reply.startswith("⚠️") or reply.startswith("❌"):
+            return False
+        if len(reply) > 250 or "```" in reply:
             return False
         return bool(cls.MISSING_DATA_RE.search(reply))
 
@@ -5560,7 +5651,8 @@ class AIChat(commands.Cog):
                 interaction=interaction,
                 ai_reply=ai_reply,
                 default_filename="curl_response.txt",
-                user_prompt=clean_q or (uploaded_file_info[0] if uploaded_file_info else "")
+                user_prompt=clean_q or (uploaded_file_info[0] if uploaded_file_info else ""),
+                ephemeral=not 公開回應
             )
         except Exception as e:
             try:

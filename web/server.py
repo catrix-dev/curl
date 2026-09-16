@@ -11,6 +11,8 @@ import json
 import sqlite3
 import re
 import urllib.parse
+import time
+import secrets
 from datetime import datetime
 
 
@@ -84,9 +86,58 @@ class WebServer:
         session_secret = os.getenv('SESSION_SECRET', fernet.Fernet.generate_key().decode())
         secret_key = base64.urlsafe_b64decode(session_secret.encode() if len(session_secret) == 44 else base64.urlsafe_b64encode(session_secret.encode()[:32]))
         
+        # 快取與鎖
+        self._user_guilds_cache = {}
+
         # 創建應用
         self.app = web.Application(middlewares=[session_middleware(EncryptedCookieStorage(secret_key)), self.error_middleware])
         self.setup_routes()
+
+    @staticmethod
+    def _atomic_json_write(file_path: str, data, indent: int = 2):
+        """原子寫入 JSON 檔案，防止斷電或併發衝突導致檔案損壞或丟失"""
+        dir_name = os.path.dirname(os.path.abspath(file_path))
+        os.makedirs(dir_name, exist_ok=True)
+        tmp_file = f"{file_path}.tmp_{os.getpid()}_{time.time()}"
+        try:
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=indent)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_file, file_path)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
+
+    async def get_user_guilds(self, access_token: str):
+        """獲取用戶 Discord 伺服器清單（60 秒記憶體快取，防範 429 Rate Limit）"""
+        if not access_token:
+            return None
+        now = time.time()
+        cached = self._user_guilds_cache.get(access_token)
+        if cached and now - cached[0] < 60:
+            return cached[1]
+        try:
+            async with ClientSession() as client_session:
+                headers = {'Authorization': f"Bearer {access_token}"}
+                async with client_session.get('https://discord.com/api/users/@me/guilds', headers=headers) as resp:
+                    if resp.status == 200:
+                        user_guilds = await resp.json()
+                        self._user_guilds_cache[access_token] = (now, user_guilds)
+                        return user_guilds
+                    elif resp.status == 429:
+                        if cached:
+                            return cached[1]
+                        return None
+                    return None
+        except Exception as e:
+            if cached:
+                return cached[1]
+            return None
     
     @web.middleware
     async def error_middleware(self, request, handler):
@@ -237,19 +288,28 @@ class WebServer:
         return web.FileResponse('web/apple-touch-icon.png')
     
     async def login(self, request):
-        """Discord 登錄"""
+        """Discord 登錄（含 CSRF State 驗證）"""
+        session = await get_session(request)
+        state = secrets.token_urlsafe(16)
+        session['oauth_state'] = state
         oauth_url = (
             f"https://discord.com/api/oauth2/authorize"
             f"?client_id={self.client_id}"
             f"&redirect_uri={self.redirect_uri}"
             f"&response_type=code"
             f"&scope=identify%20guilds"
+            f"&state={state}"
         )
         raise web.HTTPFound(oauth_url)
     
     async def callback(self, request):
         """OAuth2 回調"""
         code = request.query.get('code')
+        state = request.query.get('state')
+        session = await get_session(request)
+        saved_state = session.pop('oauth_state', None)
+        if saved_state and state != saved_state:
+            return web.Response(text="錯誤：OAuth State 驗證失敗 (CSRF 攔截)", status=400)
         
         if not code:
             return web.Response(text="錯誤：未提供授權碼", status=400)
@@ -343,13 +403,10 @@ class WebServer:
         # 獲取機器人所在的伺服器
         bot_guild_ids = {str(guild.id) for guild in self.bot.guilds}
         
-        # 獲取用戶的 Discord 伺服器
-        async with ClientSession() as client_session:
-            headers = {'Authorization': f"Bearer {access_token}"}
-            async with client_session.get('https://discord.com/api/users/@me/guilds', headers=headers) as resp:
-                if resp.status != 200:
-                    return web.json_response({'error': 'Failed to fetch guilds'}, status=500)
-                user_guilds = await resp.json()
+        # 獲取用戶的 Discord 伺服器（使用 60s 記憶體快取）
+        user_guilds = await self.get_user_guilds(access_token)
+        if user_guilds is None:
+            return web.json_response({'error': 'Failed to fetch guilds'}, status=500)
         
         # 過濾有管理權限且機器人也在的伺服器
         accessible_guilds = []
@@ -905,12 +962,9 @@ class WebServer:
         else:
             # 非開發者需要有管理權限
             access_token = session.get('access_token')
-            async with ClientSession() as client_session:
-                headers = {'Authorization': f"Bearer {access_token}"}
-                async with client_session.get('https://discord.com/api/users/@me/guilds', headers=headers) as resp:
-                    if resp.status != 200:
-                        raise web.HTTPFound('/select-server')
-                    user_guilds = await resp.json()
+            user_guilds = await self.get_user_guilds(access_token)
+            if not user_guilds:
+                raise web.HTTPFound('/select-server')
             
             # 檢查用戶是否在此伺服器且有管理權限
             for guild in user_guilds:
@@ -1274,19 +1328,36 @@ class WebServer:
             with open(file_path, 'r', encoding='utf-8') as f:
                 achievements_data = json.load(f)
             
-            if user_id in achievements_data and achievement_id in achievements_data[user_id]:
-                achievements_data[user_id].remove(achievement_id)
+            if user_id in achievements_data:
+                u_data = achievements_data[user_id]
+                removed = False
+                if isinstance(u_data, list):
+                    if achievement_id in u_data:
+                        u_data.remove(achievement_id)
+                        removed = True
+                        if len(u_data) == 0:
+                            del achievements_data[user_id]
+                elif isinstance(u_data, dict):
+                    unlocked = u_data.get('unlocked', [])
+                    if achievement_id in unlocked:
+                        unlocked.remove(achievement_id)
+                        removed = True
+                        if achievement_id in u_data:
+                            del u_data[achievement_id]
+                        if len(unlocked) == 0:
+                            del achievements_data[user_id]
                 
-                if len(achievements_data[user_id]) == 0:
-                    del achievements_data[user_id]
-                
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(achievements_data, f, ensure_ascii=False, indent=4)
-                
-                return web.json_response({
-                    'success': True, 
-                    'message': '成就已撤銷'
-                })
+                if removed:
+                    self._atomic_json_write(file_path, achievements_data, indent=4)
+                    return web.json_response({
+                        'success': True, 
+                        'message': '成就已撤銷'
+                    })
+                else:
+                    return web.json_response({
+                        'success': False, 
+                        'message': '用戶沒有此成就'
+                    })
             else:
                 return web.json_response({
                     'success': False, 
@@ -1377,20 +1448,22 @@ class WebServer:
             
             # 更新設定
             if 'enabled' in body:
-                data['enabled'] = body['enabled']
+                data['enabled'] = bool(body['enabled'])
             if 'category_id' in body:
-                data['category_id'] = body['category_id']
+                c_id = str(body['category_id']).strip() if body['category_id'] is not None else ""
+                data['category_id'] = c_id if c_id and c_id.isdigit() else None
             if 'support_role_id' in body:
-                data['support_role_id'] = body['support_role_id']
+                r_id = str(body['support_role_id']).strip() if body['support_role_id'] is not None else ""
+                data['support_role_id'] = r_id if r_id and r_id.isdigit() else None
             if 'log_channel_id' in body:
-                data['log_channel_id'] = body['log_channel_id']
+                l_id = str(body['log_channel_id']).strip() if body['log_channel_id'] is not None else ""
+                data['log_channel_id'] = l_id if l_id and l_id.isdigit() else None
             if 'panel_channel_id' in body:
-                data['panel_channel_id'] = body['panel_channel_id']
+                p_id = str(body['panel_channel_id']).strip() if body['panel_channel_id'] is not None else ""
+                data['panel_channel_id'] = p_id if p_id and p_id.isdigit() else None
             
-            # 保存數據
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=4)
+            # 原子保存數據
+            self._atomic_json_write(file_path, data, indent=4)
             
             return web.json_response({'success': True, 'message': '設定已更新'})
             
@@ -1510,16 +1583,13 @@ class WebServer:
             is_admin = False
             access_token = session.get('access_token')
             if access_token:
-                async with ClientSession() as client_session:
-                    headers = {'Authorization': f"Bearer {access_token}"}
-                    async with client_session.get('https://discord.com/api/users/@me/guilds', headers=headers) as resp:
-                        if resp.status == 200:
-                            user_guilds = await resp.json()
-                            for guild in user_guilds:
-                                if str(guild['id']) == str(guild_id):
-                                    permissions = int(guild.get('permissions', 0))
-                                    is_admin = (permissions & 0x8) == 0x8
-                                    break
+                user_guilds = await self.get_user_guilds(access_token)
+                if user_guilds:
+                    for guild in user_guilds:
+                        if str(guild['id']) == str(guild_id):
+                            permissions = int(guild.get('permissions', 0))
+                            is_admin = (permissions & 0x8) == 0x8
+                            break
             
             if not (is_ticket_owner or is_admin):
                 return web.json_response({'error': '無權查看此客服單'}, status=403)
@@ -2133,14 +2203,11 @@ class WebServer:
         if guild_id not in bot_guild_ids:
             return False
         
-        # 獲取用戶的 Discord 伺服器列表
+        # 獲取用戶的 Discord 伺服器列表（60s 快取防 429）
         try:
-            async with ClientSession() as client_session:
-                headers = {'Authorization': f"Bearer {access_token}"}
-                async with client_session.get('https://discord.com/api/users/@me/guilds', headers=headers) as resp:
-                    if resp.status != 200:
-                        return False
-                    user_guilds = await resp.json()
+            user_guilds = await self.get_user_guilds(access_token)
+            if not user_guilds:
+                return False
             
             # 檢查用戶是否對該伺服器有管理權限
             for guild in user_guilds:
@@ -2450,9 +2517,7 @@ class WebServer:
                     "user_images": {},
                     "user_draws": {}
                 }
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(config, f, ensure_ascii=False, indent=2)
+                self._atomic_json_write(file_path, config, indent=2)
             else:
                 updated_usage = False
                 if "user_images" not in daily_usage:
@@ -2538,9 +2603,7 @@ class WebServer:
                 }
             
             config['enabled'] = enabled
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            self._atomic_json_write(file_path, config, indent=2)
             
             return web.json_response({'success': True, 'enabled': enabled})
         except Exception as e:
@@ -2636,9 +2699,7 @@ class WebServer:
                 if "limit_request" in config:
                     del config["limit_request"]
             
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            self._atomic_json_write(file_path, config, indent=2)
             
             return web.json_response({'success': True, 'config': config, 'notice': notice_msg})
         except Exception as e:
@@ -2688,9 +2749,7 @@ class WebServer:
             
             config['role_limits'] = clean_limits
             config['image_role_limits'] = clean_img_limits
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            self._atomic_json_write(file_path, config, indent=2)
             
             return web.json_response({
                 'success': True,
@@ -2741,9 +2800,7 @@ class WebServer:
             }
             config['banned_users'] = banned_users
             
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            self._atomic_json_write(file_path, config, indent=2)
             
             # 清空該用戶記憶
             mem_path = f'./data/{guild_id}/ai-memory/{user_id}.json'
@@ -2797,8 +2854,7 @@ class WebServer:
                     deleted = True
                 
                 config['banned_users'] = banned_users
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(config, f, ensure_ascii=False, indent=2)
+                self._atomic_json_write(file_path, config, indent=2)
             
             return web.json_response({'success': True, 'deleted': deleted, 'user_id': user_id_clean})
         except Exception as e:
