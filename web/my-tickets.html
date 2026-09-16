@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的客服單</title>
+    <title>我的客服單 - curl 控制台</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <style>
         * {
             margin: 0;
@@ -29,10 +32,20 @@
         }
 
         .navbar-brand {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             font-weight: 700;
             color: #2563eb;
             text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .navbar-brand img {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            object-fit: cover;
         }
 
         .navbar-nav {
@@ -435,7 +448,10 @@
 <body>
     <!-- 導覽列 -->
     <nav class="navbar">
-        <a href="/" class="navbar-brand">Discord 機器人控制台</a>
+        <a href="/select-server" class="navbar-brand">
+            <img src="/icon.png" alt="curl">
+            <span>curl 控制台</span>
+        </a>
         <div class="navbar-nav">
             <a href="/select-server" class="nav-link">管理面板</a>
             <a href="/my-tickets" class="nav-link active">我的客服單</a>
@@ -555,7 +571,7 @@
                     <div class="empty-state">
                         <div class="empty-state-icon">⚠️</div>
                         <div class="empty-state-text">載入失敗</div>
-                        <div class="empty-state-subtext">${error.message}</div>
+                        <div class="empty-state-subtext">${escapeHtml(error.message)}</div>
                     </div>
                 `;
             }
@@ -617,6 +633,17 @@
             displayTickets(filtered);
         }
 
+        // HTML 轉義函數
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // 显示客服单
         function displayTickets(tickets) {
             const container = document.getElementById('ticketsList');
@@ -637,46 +664,49 @@
 
             let html = '';
             tickets.forEach(ticket => {
-                const serverName = serverMap[ticket.guild_id] || '未知伺服器';
+                const serverName = escapeHtml(serverMap[ticket.guild_id] || '未知伺服器');
                 const createdDate = new Date(ticket.created_at).toLocaleString('zh-TW');
                 const closedDate = ticket.closed_at ? new Date(ticket.closed_at).toLocaleString('zh-TW') : '-';
                 const statusClass = ticket.status === 'open' ? 'open' : 'closed';
                 const statusText = ticket.status === 'open' ? '開啟中' : '已關閉';
+                const safeChannelName = escapeHtml(ticket.channel_name || '客服工單');
+                const safeTicketId = escapeHtml(ticket.ticket_id || '');
+                const safeGuildId = escapeHtml(ticket.guild_id || '');
                 const closeReasonHtml = ticket.closed_reason ? `
                             <div class="info-item">
                                 <div class="info-label">關閉原因</div>
-                                <div class="info-value">` + ticket.closed_reason + `</div>
+                                <div class="info-value">${escapeHtml(ticket.closed_reason)}</div>
                             </div>
                             ` : '';
                 const closeButtonHtml = ticket.status === 'open' ? `
-                                <button class="btn" onclick="closeTicketFromUser('` + ticket.guild_id + `', '` + ticket.ticket_id + `')" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: #dc2626; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">
+                                <button class="btn" onclick="closeTicketFromUser('${safeGuildId}', '${safeTicketId}')" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: #dc2626; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">
                                     🔒 關閉客服單
                                 </button>
                                 ` : '';
 
                 html += `
-                    <div class="ticket-item status-` + statusClass + `">
+                    <div class="ticket-item status-${statusClass}">
                         <div class="ticket-header">
                             <div>
-                                <div class="ticket-title">` + ticket.channel_name + `</div>
-                                <div class="ticket-id">ID: ` + ticket.ticket_id + `</div>
+                                <div class="ticket-title">${safeChannelName}</div>
+                                <div class="ticket-id">ID: ${safeTicketId}</div>
                             </div>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                <button class="btn btn-primary" onclick="viewTranscript('` + ticket.guild_id + `', '` + ticket.ticket_id + `')" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 4px; font-weight: 600;">
+                                <button class="btn btn-primary" onclick="viewTranscript('${safeGuildId}', '${safeTicketId}')" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 4px; font-weight: 600;">
                                     📝 查看內容
                                 </button>
-                                ` + closeButtonHtml + `
-                                <span class="ticket-status ` + statusClass + `">` + statusText + `</span>
+                                ${closeButtonHtml}
+                                <span class="ticket-status ${statusClass}">${statusText}</span>
                             </div>
                         </div>
                         <div class="ticket-info">
                             <div class="info-item">
                                 <div class="info-label">伺服器</div>
-                                <div class="info-value server-name">` + serverName + `</div>
+                                <div class="info-value server-name">${serverName}</div>
                             </div>
                             <div class="info-item">
                                 <div class="info-label">創建時間</div>
-                                <div class="info-value">` + createdDate + `</div>
+                                <div class="info-value">${createdDate}</div>
                             </div>
                             <div class="info-item">
                                 <div class="info-label">關閉時間</div>

@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import json
 import os
+import asyncio
 from typing import Optional
 
 class TempVoice(commands.Cog):
@@ -263,13 +264,24 @@ class TempVoice(commands.Cog):
         
         # 用戶離開頻道 - 檢查是否需要刪除臨時頻道
         if before.channel and before.channel.id in self.temp_channels:
-            # 如果頻道沒有人了，刪除它
+            # 如果頻道沒有人了，等待1分鐘後刪除
             if len(before.channel.members) == 0:
-                try:
-                    await before.channel.delete()
-                    del self.temp_channels[before.channel.id]
-                except:
-                    pass
+                channel_id = before.channel.id
+                # 等待60秒
+                await asyncio.sleep(60)
+                
+                # 再次檢查頻道是否存在且仍然為空
+                channel = member.guild.get_channel(channel_id)
+                if channel and len(channel.members) == 0 and channel_id in self.temp_channels:
+                    try:
+                        await channel.delete()
+                        del self.temp_channels[channel_id]
+                        print(f'🗑️ 已刪除空的臨時頻道: {channel.name}')
+                    except Exception as e:
+                        print(f'❌ 刪除臨時頻道失敗: {e}')
+                        # 如果刪除失敗，從追蹤列表中移除
+                        if channel_id in self.temp_channels:
+                            del self.temp_channels[channel_id]
     
     @commands.Cog.listener()
     async def on_ready(self):

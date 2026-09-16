@@ -3,7 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discord 機器人控制台</title>
+    <title>{GUILD_NAME} - curl 控制台</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <style id="pre-route-style"></style>
+    <script>
+        (function() {
+            try {
+                const parts = window.location.pathname.split('/').filter(Boolean);
+                if (parts.length >= 3 && parts[0] === 'dashboard') {
+                    const feat = decodeURIComponent(parts[2]).toLowerCase().trim();
+                    if (feat && feat !== 'dashboard' && feat !== 'overview' && feat !== '總覽' && feat !== '儀表板') {
+                        const styleEl = document.getElementById('pre-route-style');
+                        if (styleEl) styleEl.textContent = '#section-dashboard { display: none !important; }';
+                    }
+                }
+            } catch(e) {}
+        })();
+    </script>
     <style>
         * {
             margin: 0;
@@ -31,6 +49,17 @@
             font-size: 1.2rem;
             font-weight: 600;
             color: #2563eb;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+        }
+
+        .navbar-brand img {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            object-fit: cover;
         }
 
         .navbar-user {
@@ -63,6 +92,33 @@
 
         .logout-btn:hover {
             background: #b91c1c;
+        }
+
+        .copy-url-btn {
+            background: rgba(37, 99, 235, 0.12);
+            border: 1px solid rgba(37, 99, 235, 0.35);
+            color: #60a5fa;
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .copy-url-btn:hover {
+            background: rgba(37, 99, 235, 0.25);
+            border-color: rgba(37, 99, 235, 0.6);
+            color: #93c5fd;
+        }
+
+        .copy-url-btn.copied {
+            background: rgba(16, 185, 129, 0.2) !important;
+            border-color: rgba(16, 185, 129, 0.5) !important;
+            color: #34d399 !important;
         }
 
         .hamburger {
@@ -415,6 +471,14 @@
                 padding: 0.4rem 0.8rem;
                 font-size: 0.85rem;
             }
+
+            .copy-url-btn span {
+                display: none;
+            }
+            .copy-url-btn {
+                padding: 0.4rem 0.5rem;
+                margin-right: 0.4rem;
+            }
         }
     </style>
 </head>
@@ -425,11 +489,16 @@
             <span></span>
             <span></span>
         </button>
-        <div class="navbar-brand">
-            Discord 機器人控制台
-            <span style="margin-left: 1rem; color: #888; font-size: 0.9rem;">/ {GUILD_NAME}</span>
-        </div>
+        <a href="/select-server" class="navbar-brand">
+            <img src="/icon.png" alt="curl">
+            <span>curl 控制台</span>
+            <span style="margin-left: 0.75rem; color: #888; font-size: 0.9rem;">/ {GUILD_NAME}</span>
+        </a>
         <div class="navbar-user">
+            <button id="copy-section-link-btn" class="copy-url-btn" onclick="copyCurrentSectionUrl()" title="複製當前功能頁面專屬連結，方便分享給他人直接查看">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                <span id="copy-btn-text">複製功能連結</span>
+            </button>
             <a href="/my-tickets" style="color: #2563eb; text-decoration: none; margin-right: 1rem;">🎫 我的客服單</a>
             <a href="/select-server" style="color: #2563eb; text-decoration: none; margin-right: 1rem;">← 返回伺服器列表</a>
             <img src="{AVATAR_URL}" alt="Avatar" class="user-avatar">
@@ -443,44 +512,47 @@
     <div class="main-layout">
         <div class="sidebar" id="sidebar">
             <div class="sidebar-section">數據總覽</div>
-            <div class="sidebar-item active" onclick="showSection('dashboard')">
+            <div class="sidebar-item active" data-section="dashboard" onclick="showSection('dashboard', this)">
                 儀表板
             </div>
-            <div class="sidebar-item" onclick="showSection('levels')">
+            <div class="sidebar-item" data-section="levels" onclick="showSection('levels', this)">
                 等級系統
             </div>
-            <div class="sidebar-item" onclick="showSection('daily')">
+            <div class="sidebar-item" data-section="daily" onclick="showSection('daily', this)">
                 簽到系統
             </div>
-            <div class="sidebar-item" onclick="showSection('birthdays')">
+            <div class="sidebar-item" data-section="birthdays" onclick="showSection('birthdays', this)">
                 生日系統
             </div>
-            <div class="sidebar-item" onclick="showSection('games')">
+            <div class="sidebar-item" data-section="games" onclick="showSection('games', this)">
                 遊戲系統
             </div>
-            <div class="sidebar-item" onclick="showSection('statistics')">
+            <div class="sidebar-item" data-section="statistics" onclick="showSection('statistics', this)">
                 活躍度分析
             </div>
             
             <div class="sidebar-section">系統管理</div>
-            <div class="sidebar-item" onclick="showSection('warnings')">
+            <div class="sidebar-item" data-section="warnings" onclick="showSection('warnings', this)">
                 警告管理
             </div>
-            <div class="sidebar-item" onclick="showSection('achievements')">
+            <div class="sidebar-item" data-section="achievements" onclick="showSection('achievements', this)">
                 成就管理
             </div>
-            <div class="sidebar-item" onclick="showSection('tickets')">
+            <div class="sidebar-item" data-section="tickets" onclick="showSection('tickets', this)">
                 客服單管理
             </div>
-            <div class="sidebar-item" onclick="showSection('custom-commands')">
+            <div class="sidebar-item" data-section="custom-commands" onclick="showSection('custom-commands', this)">
                 自定義命令
             </div>
             
             <div class="sidebar-section">系統設定</div>
-            <div class="sidebar-item" onclick="showSection('welcome')">
+            <div class="sidebar-item" data-section="ai-chat" onclick="showSection('ai-chat', this)">
+                AI 聊天系統
+            </div>
+            <div class="sidebar-item" data-section="welcome" onclick="showSection('welcome', this)">
                 歡迎系統
             </div>
-            <div class="sidebar-item" onclick="showSection('temp-voice')">
+            <div class="sidebar-item" data-section="temp-voice" onclick="showSection('temp-voice', this)">
                 臨時語音
             </div>
         </div>
@@ -594,11 +666,126 @@
                     <div id="tickets-data" style="color: #888;">載入中...</div>
                 </div>
             </div>
+
+            <!-- AI 聊天系統 -->
+            <div id="section-ai-chat" class="content-section" style="display: none;">
+                <div class="section">
+                    <h2 class="section-title">AI 聊天系統管理</h2>
+                    <div id="ai-chat-data" style="color: #888;">載入中...</div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         const GUILD_ID = '{GUILD_ID}';
+        const GUILD_NAME = '{GUILD_NAME}';
+        const INITIAL_FEATURE = '{INITIAL_FEATURE}';
+
+        // 支援的功能對應與別名映射表
+        const SECTION_MAP = {
+            'dashboard': 'dashboard',
+            'overview': 'dashboard',
+            'stats': 'dashboard',
+            '總覽': 'dashboard',
+            '數據總覽': 'dashboard',
+            '儀表板': 'dashboard',
+
+            'levels': 'levels',
+            'level': 'levels',
+            'rank': 'levels',
+            'ranking': 'levels',
+            '等級': 'levels',
+            '等級系統': 'levels',
+
+            'daily': 'daily',
+            'checkin': 'daily',
+            'sign': 'daily',
+            '簽到': 'daily',
+            '簽到系統': 'daily',
+
+            'birthdays': 'birthdays',
+            'birthday': 'birthdays',
+            '生日': 'birthdays',
+            '生日系統': 'birthdays',
+
+            'games': 'games',
+            'game': 'games',
+            '遊戲': 'games',
+            '遊戲系統': 'games',
+
+            'statistics': 'statistics',
+            'analytics': 'statistics',
+            'activity': 'statistics',
+            '活躍度': 'statistics',
+            '活躍度分析': 'statistics',
+
+            'warnings': 'warnings',
+            'warning': 'warnings',
+            'warn': 'warnings',
+            '警告': 'warnings',
+            '警告管理': 'warnings',
+
+            'achievements': 'achievements',
+            'achievement': 'achievements',
+            '成就': 'achievements',
+            '成就管理': 'achievements',
+
+            'tickets': 'tickets',
+            'ticket': 'tickets',
+            '客服': 'tickets',
+            '客服單': 'tickets',
+            '客服單管理': 'tickets',
+            '工單': 'tickets',
+
+            'custom-commands': 'custom-commands',
+            'customcommands': 'custom-commands',
+            'commands': 'custom-commands',
+            'command': 'custom-commands',
+            '自定義命令': 'custom-commands',
+            '自訂命令': 'custom-commands',
+
+            'ai-chat': 'ai-chat',
+            'ai': 'ai-chat',
+            'aichat': 'ai-chat',
+            'chat': 'ai-chat',
+            'ai-settings': 'ai-chat',
+            'ai聊天': 'ai-chat',
+            'ai聊天系統': 'ai-chat',
+
+            'welcome': 'welcome',
+            'join': 'welcome',
+            '歡迎': 'welcome',
+            '歡迎系統': 'welcome',
+
+            'temp-voice': 'temp-voice',
+            'tempvoice': 'temp-voice',
+            'voice': 'temp-voice',
+            '臨時語音': 'temp-voice',
+            '語音': 'temp-voice'
+        };
+
+        const SECTION_TITLES = {
+            'dashboard': '數據總覽',
+            'levels': '等級系統',
+            'daily': '簽到系統',
+            'birthdays': '生日系統',
+            'games': '遊戲系統',
+            'statistics': '活躍度分析',
+            'warnings': '警告管理',
+            'achievements': '成就管理',
+            'tickets': '客服單管理',
+            'custom-commands': '自定義命令',
+            'ai-chat': 'AI 聊天系統',
+            'welcome': '歡迎系統',
+            'temp-voice': '臨時語音'
+        };
+
+        function normalizeSectionName(name) {
+            if (!name) return 'dashboard';
+            const clean = String(name).toLowerCase().trim();
+            return SECTION_MAP[clean] || (document.getElementById('section-' + clean) ? clean : 'dashboard');
+        }
         
         // 漢堡菜單切換函數
         function toggleSidebar() {
@@ -611,8 +798,25 @@
             hamburger.classList.toggle('active');
         }
         
-        // 側邊欄切換函數
-        function showSection(sectionName) {
+        // 全局 HTML 轉義函數
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // 側邊欄切換函數 (支援 URL 自動同步與瀏覽歷史)
+        function showSection(sectionName, clickedEl, updateUrl = true) {
+            const canonicalSection = normalizeSectionName(sectionName);
+
+            // 清理預防閃爍的臨時遮罩樣式
+            const preStyle = document.getElementById('pre-route-style');
+            if (preStyle) preStyle.textContent = '';
+
             // 隱藏所有section
             const sections = document.querySelectorAll('.content-section');
             sections.forEach(section => {
@@ -626,13 +830,30 @@
             });
             
             // 顯示選中的section
-            const targetSection = document.getElementById('section-' + sectionName);
+            const targetSection = document.getElementById('section-' + canonicalSection);
             if (targetSection) {
                 targetSection.style.display = 'block';
             }
             
-            // 添加active狀態到點擊的項目
-            event.currentTarget.classList.add('active');
+            // 添加 active 狀態到點擊或匹配的側邊欄項目
+            const activeItem = document.querySelector(`.sidebar-item[data-section="${canonicalSection}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active');
+            } else if (clickedEl && clickedEl.classList) {
+                clickedEl.classList.add('active');
+            }
+
+            // 更新網頁標題
+            const secTitle = SECTION_TITLES[canonicalSection] || '控制台';
+            document.title = `${secTitle} - ${GUILD_NAME} - curl 控制台`;
+
+            // 更新瀏覽器 URL (支援直接複製分享給他人)
+            if (updateUrl && window.history && window.history.pushState) {
+                const targetPath = `/dashboard/${GUILD_ID}/${canonicalSection}`;
+                if (window.location.pathname !== targetPath) {
+                    window.history.pushState({ section: canonicalSection }, '', targetPath);
+                }
+            }
             
             // 移動端：切換頁面後自動關閉側邊欄
             if (window.innerWidth <= 768) {
@@ -640,10 +861,69 @@
                 const overlay = document.querySelector('.sidebar-overlay');
                 const hamburger = document.querySelector('.hamburger');
                 
-                sidebar.classList.remove('active');
-                overlay.classList.remove('active');
-                hamburger.classList.remove('active');
+                if (sidebar) sidebar.classList.remove('active');
+                if (overlay) overlay.classList.remove('active');
+                if (hamburger) hamburger.classList.remove('active');
             }
+        }
+
+        // 解析初始載入應顯示的功能區塊
+        function getInitialSection() {
+            // 1. 優先查看後端匹配注入之 INITIAL_FEATURE
+            if (typeof INITIAL_FEATURE !== 'undefined' && INITIAL_FEATURE && INITIAL_FEATURE !== '{INITIAL_FEATURE}') {
+                const mapped = normalizeSectionName(INITIAL_FEATURE);
+                if (mapped) return mapped;
+            }
+            // 2. 從 window.location.pathname 中解析 /dashboard/<guild_id>/<feature>
+            try {
+                const parts = window.location.pathname.split('/').filter(Boolean);
+                if (parts.length >= 3 && parts[0] === 'dashboard') {
+                    const raw = decodeURIComponent(parts[2]);
+                    return normalizeSectionName(raw);
+                }
+            } catch (e) {
+                console.error('解析當前功能路徑失敗:', e);
+            }
+            return 'dashboard';
+        }
+
+        // 複製當前功能頁面連結
+        function copyCurrentSectionUrl() {
+            const url = window.location.href;
+            const btn = document.getElementById('copy-section-link-btn');
+            const btnText = document.getElementById('copy-btn-text');
+
+            function onCopied() {
+                if (btn) btn.classList.add('copied');
+                if (btnText) btnText.textContent = '✓ 已複製連結！';
+                setTimeout(() => {
+                    if (btn) btn.classList.remove('copied');
+                    if (btnText) btnText.textContent = '複製功能連結';
+                }, 2500);
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(onCopied).catch(() => fallbackCopyText(url, onCopied));
+            } else {
+                fallbackCopyText(url, onCopied);
+            }
+        }
+
+        function fallbackCopyText(text, callback) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try {
+                document.execCommand('copy');
+                if (callback) callback();
+            } catch (e) {
+                alert('複製失敗，請手動複製網址：' + text);
+            }
+            document.body.removeChild(ta);
         }
         
         // 載入統計數據
@@ -1197,17 +1477,22 @@
                     `;
                     
                     for (const [name, cmd] of Object.entries(data.commands)) {
+                        const safeName = escapeHtml(name);
+                        const safeResponse = escapeHtml(cmd.response || '');
+                        const safeUses = Number(cmd.uses || 0).toLocaleString();
+                        const encName = encodeURIComponent(name);
+                        const encResp = encodeURIComponent(cmd.response || '');
                         html += `
                             <div style="background: #1a1a1a; padding: 1rem; border-left: 3px solid #2563eb;">
                                 <div style="display: flex; justify-content: space-between; align-items: start;">
                                     <div style="flex: 1;">
-                                        <div style="color: #2563eb; font-weight: 600; font-size: 1.1rem;">!${name}</div>
-                                        <div style="color: #ccc; margin-top: 0.5rem;">${cmd.response}</div>
-                                        <div style="color: #666; font-size: 0.85rem; margin-top: 0.5rem;">使用次數：${cmd.uses || 0}</div>
+                                        <div style="color: #2563eb; font-weight: 600; font-size: 1.1rem;">!${safeName}</div>
+                                        <div style="color: #ccc; margin-top: 0.5rem; white-space: pre-wrap;">${safeResponse}</div>
+                                        <div style="color: #666; font-size: 0.85rem; margin-top: 0.5rem;">使用次數：${safeUses}</div>
                                     </div>
                                     <div style="display: flex; gap: 0.5rem;">
-                                        <button onclick="editCommand('${name}', '${cmd.response.replace(/'/g, "&apos;")}')" style="padding: 0.25rem 0.75rem; background: #333; color: #2563eb; border: 1px solid #2563eb; cursor: pointer;">編輯</button>
-                                        <button onclick="deleteCommand('${name}')" style="padding: 0.25rem 0.75rem; background: #333; color: #dc2626; border: 1px solid #dc2626; cursor: pointer;">刪除</button>
+                                        <button onclick="editCommand(decodeURIComponent('${encName}'), decodeURIComponent('${encResp}'))" style="padding: 0.25rem 0.75rem; background: #333; color: #2563eb; border: 1px solid #2563eb; cursor: pointer;">編輯</button>
+                                        <button onclick="deleteCommand(decodeURIComponent('${encName}'))" style="padding: 0.25rem 0.75rem; background: #333; color: #dc2626; border: 1px solid #dc2626; cursor: pointer;">刪除</button>
                                     </div>
                                 </div>
                             </div>
@@ -2035,6 +2320,505 @@
             }
         }
 
+        // ======================== AI 聊天系統 ========================
+        let currentAIConfig = null;
+        let currentAIRoles = [];
+
+        async function loadAIChat() {
+            try {
+                const response = await fetch('/api/ai/' + GUILD_ID);
+                if (!response.ok) {
+                    let errDetail = `HTTP ${response.status}`;
+                    try {
+                        const errJson = await response.json();
+                        if (errJson && errJson.error) errDetail += `: ${errJson.error}`;
+                    } catch(e) {}
+                    throw new Error(errDetail);
+                }
+                const res = await response.json();
+                if (!res.success) throw new Error(res.error || '載入失敗');
+
+                currentAIConfig = res.config;
+                currentAIRoles = res.roles || [];
+
+                const container = document.getElementById('ai-chat-data');
+                const cfg = currentAIConfig;
+                const isEnabled = cfg.enabled;
+                const dailyUsage = cfg.daily_usage || { total_messages: 0, users: {} };
+                const usedToday = dailyUsage.total_messages || 0;
+                const imagesUsedToday = dailyUsage.user_images ? Object.values(dailyUsage.user_images).reduce((a, b) => a + b, 0) : 0;
+                const dailyLimit = Math.min(Math.max(cfg.daily_limit || 1500, 200), 3000);
+                const pct = Math.min(100, Math.round((usedToday / dailyLimit) * 100));
+
+                let pendingNoticeHtml = '';
+                if (cfg.limit_request && cfg.limit_request.status === 'pending') {
+                    pendingNoticeHtml = `
+                        <div style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #facc15; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.85rem;">
+                            [審核中] 已向開發者申請將每日訊息上限調整為 <strong>${cfg.limit_request.requested_limit}</strong> 條（申請時間：${cfg.limit_request.requested_at ? cfg.limit_request.requested_at.slice(0, 19).replace('T', ' ') : '-'}），等待開發者審核中。
+                        </div>
+                    `;
+                }
+
+                const toggleChecked = isEnabled ? 'checked' : '';
+                const statusColor = isEnabled ? '#2563eb' : '#6b7280';
+                const statusText = isEnabled ? '已開啟' : '已關閉';
+
+                // 身分組配額表格
+                const roleLimits = cfg.role_limits || {};
+                const imageRoleLimits = cfg.image_role_limits || {};
+                let rolesRowsHtml = '';
+                if (currentAIRoles.length === 0) {
+                    rolesRowsHtml = '<tr><td colspan="4" style="text-align:center; color:#888; padding:1rem;">伺服器尚未建立身分組</td></tr>';
+                } else {
+                    currentAIRoles.forEach(role => {
+                        const limitVal = roleLimits[role.id] !== undefined ? roleLimits[role.id] : '';
+                        const imgLimitVal = imageRoleLimits[role.id] !== undefined ? imageRoleLimits[role.id] : '';
+                        rolesRowsHtml += `
+                            <tr style="border-bottom: 1px solid #2b2b2b;">
+                                <td style="padding: 0.75rem;">
+                                    <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${role.color}; margin-right:8px;"></span>
+                                    <span style="color:#fff; font-weight:500;">${role.name}</span>
+                                </td>
+                                <td style="padding: 0.75rem; color:#888;">ID: ${role.id}</td>
+                                <td style="padding: 0.75rem;">
+                                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                                        <input type="number" id="role-limit-${role.id}" value="${limitVal}" placeholder="預設 (${cfg.default_role_limit || 80})" 
+                                               style="width: 100px; padding: 0.35rem 0.5rem; background: #1a1a1a; border: 1px solid #333; color: #fff; border-radius: 4px;">
+                                        <span style="color: #666; font-size: 0.8rem;">條/天 (20-500 或 -1)</span>
+                                    </div>
+                                </td>
+                                <td style="padding: 0.75rem;">
+                                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                                        <input type="number" id="role-image-limit-${role.id}" value="${imgLimitVal}" placeholder="預設 (${cfg.default_image_limit !== undefined ? cfg.default_image_limit : 10})" 
+                                               style="width: 100px; padding: 0.35rem 0.5rem; background: #1a1a1a; border: 1px solid #333; color: #fff; border-radius: 4px;">
+                                        <span style="color: #666; font-size: 0.8rem;">條/天 (0-100 或 -1)</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                // 黑名單列表
+                const bannedUsers = cfg.banned_users || {};
+                let bannedRowsHtml = '';
+                const bannedEntries = Object.entries(bannedUsers);
+                if (bannedEntries.length === 0) {
+                    bannedRowsHtml = '<tr><td colspan="4" style="text-align:center; color:#888; padding:1rem;">目前無封禁名單</td></tr>';
+                } else {
+                    bannedEntries.forEach(([uid, info]) => {
+                        const safeUid = encodeURIComponent(uid).replace(/'/g, "%27");
+                        const displayName = escapeHtml(info.name || uid);
+                        const reason = escapeHtml(info.reason || '無');
+                        const time = info.banned_at ? info.banned_at.slice(0, 19).replace('T', ' ') : '-';
+                        bannedRowsHtml += `
+                            <tr style="border-bottom: 1px solid #2b2b2b;">
+                                <td style="padding: 0.75rem; color:#fff;">${displayName}</td>
+                                <td style="padding: 0.75rem; color:#aaa;">${reason}</td>
+                                <td style="padding: 0.75rem; color:#888; font-size:0.85rem;">${time}</td>
+                                <td style="padding: 0.75rem; text-align:right;">
+                                    <button onclick="unbanAIUser('${safeUid}', this)" class="btn btn-danger" style="padding: 0.25rem 0.6rem; font-size:0.8rem;">解封</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                container.innerHTML = `
+                    ${pendingNoticeHtml}
+                    <!-- 狀態總覽與開關 -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                        <!-- 系統狀態 -->
+                        <div style="background: #1a1a1a; padding: 1.25rem; border-left: 3px solid ${statusColor}; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <div style="color: #fff; font-size: 1.1rem; font-weight: 600;">AI 聊天功能</div>
+                                <label style="position: relative; display: inline-block; width: 44px; height: 22px; cursor: pointer;">
+                                    <input type="checkbox" id="ai-toggle" ${toggleChecked} 
+                                           onchange="toggleAIChat(this.checked)"
+                                           style="opacity: 0; width: 0; height: 0;">
+                                    <span style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+                                                 background: ${isEnabled ? '#333' : '#2b2b2b'}; 
+                                                 transition: 0.2s; border: 1px solid ${isEnabled ? '#2563eb' : '#444'}; border-radius: 11px;">
+                                        <span style="position: absolute; height: 14px; width: 14px; left: ${isEnabled ? '26px' : '4px'}; 
+                                                     top: 3px; background: ${isEnabled ? '#2563eb' : '#666'}; transition: 0.2s; border-radius: 50%;"></span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div style="margin-bottom: 0.75rem;">
+                                <span style="color: ${statusColor}; font-weight: 600; font-size: 0.95rem;">${statusText}</span>
+                            </div>
+                            <p style="color: #888; font-size: 0.85rem; margin: 0; line-height: 1.4;">
+                                開啟後，伺服器成員可以在頻道中 <strong>@機器人</strong> 或發送訊息進行多輪智慧對話。
+                            </p>
+                        </div>
+
+                        <!-- 每日用量進度 -->
+                        <div style="background: #1a1a1a; padding: 1.25rem; border-left: 3px solid #2563eb; border-radius: 4px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
+                                <div style="color: #fff; font-size: 1.1rem; font-weight: 600;">全服今日配額</div>
+                                <span style="color: #2563eb; font-weight: 700; font-size: 1.1rem;">${usedToday} / ${dailyLimit} 條</span>
+                            </div>
+                            <div style="background: #2b2b2b; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 0.75rem;">
+                                <div style="width: ${pct}%; background: ${pct >= 90 ? '#dc2626' : '#2563eb'}; height: 100%; transition: width 0.3s;"></div>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; color: #888; font-size: 0.8rem;">
+                                <span>單日全服上限：200-2000 條 (預設 500)</span>
+                                <span>今日圖片分析：${imagesUsedToday} 次</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 基本設定與 System Prompt -->
+                    <div style="background: #1a1a1a; padding: 1.25rem; border-left: 3px solid #2563eb; border-radius: 4px; margin-bottom: 1.5rem;">
+                        <h3 style="color: #fff; margin-top: 0; margin-bottom: 1rem; font-size: 1rem;">基本參數與 AI 人設設定</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label style="display: block; color: #ccc; font-size: 0.85rem; margin-bottom: 0.4rem;">伺服器每日訊息總上限 (200-3000)</label>
+                                <input type="number" id="ai-daily-limit" value="${dailyLimit}" min="200" max="3000"
+                                       style="width: 100%; padding: 0.5rem; background: #2b2b2b; border: 1px solid #333; color: #fff; border-radius: 4px;">
+                                <small style="color: #666;">預設 1500，限制範圍 200 至 3000 條。達到後當天暫停 AI 訊息。</small>
+                            </div>
+                            <div>
+                                <label style="display: block; color: #ccc; font-size: 0.85rem; margin-bottom: 0.4rem;">預設每人每日配額 (20-500 條/天)</label>
+                                <input type="number" id="ai-default-role-limit" value="${cfg.default_role_limit || 85}" min="20" max="500"
+                                       style="width: 100%; padding: 0.5rem; background: #2b2b2b; border: 1px solid #333; color: #fff; border-radius: 4px;">
+                                <small style="color: #666;">預設 85 條。未特別指定配額身分組成員的每日上限。</small>
+                            </div>
+                            <div>
+                                <label style="display: block; color: #ccc; font-size: 0.85rem; margin-bottom: 0.4rem;">預設每人圖片配額 (0-100 條/天)</label>
+                                <input type="number" id="ai-default-image-limit" value="${cfg.default_image_limit !== undefined ? cfg.default_image_limit : 25}" min="0" max="100"
+                                       style="width: 100%; padding: 0.5rem; background: #2b2b2b; border: 1px solid #333; color: #fff; border-radius: 4px;">
+                                <small style="color: #666;">預設 25 條。一般人每天 25 條帶圖片額度，開發者無限制。</small>
+                            </div>
+                            <div>
+                                <label style="display: block; color: #ccc; font-size: 0.85rem; margin-bottom: 0.4rem;">預設每人生圖配額 (0-100 條/天)</label>
+                                <input type="number" id="ai-default-draw-limit" value="${cfg.default_draw_limit !== undefined ? cfg.default_draw_limit : 10}" min="0" max="100"
+                                       style="width: 100%; padding: 0.5rem; background: #2b2b2b; border: 1px solid #333; color: #fff; border-radius: 4px;">
+                                <small style="color: #666;">預設 10 條。一般人每天 10 條 AI 生圖額度，開發者無限制。</small>
+                            </div>
+                            <div>
+                                <label style="display: block; color: #ccc; font-size: 0.85rem; margin-bottom: 0.4rem;">伺服器預設 AI 人設風格</label>
+                                <select id="ai-persona" style="width: 100%; padding: 0.5rem; background: #2b2b2b; border: 1px solid #333; color: #fff; border-radius: 4px;">
+                                    <option value="cute_cat" ${cfg.persona === 'cute_cat' ? 'selected' : ''}>🐱 可愛貓貓 (軟萌活潑、撒嬌傲嬌口吻)</option>
+                                    <option value="normal" ${cfg.persona === 'normal' || !cfg.persona ? 'selected' : ''}>🤖 一般 (標準專業、條理分明、高效助手)</option>
+                                    <option value="engineer" ${cfg.persona === 'engineer' ? 'selected' : ''}>💻 頂級工程師 (首席架構師、追求極致邏輯與效能)</option>
+                                    <option value="catgirl" ${cfg.persona === 'catgirl' ? 'selected' : ''}>🐾 貓娘 (超黏主人、已婚、百依百順乖巧互動)</option>
+                                </select>
+                                <small style="color: #666;">本服預設人設。成員亦可使用 /ai 人設 設定個人偏好。</small>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; color: #ccc; font-size: 0.85rem; margin-bottom: 0.4rem;">
+                                伺服器專屬自訂提示詞 (Server Prompt)
+                                <span style="color: #3b82f6; font-size: 0.75rem; margin-left: 0.5rem;">[儲存於 server-memory.db，採累加機制，保留開發者核心準則]</span>
+                            </label>
+                            <textarea id="ai-system-prompt" rows="6" 
+                                      placeholder="xxxxx,&#10;xxxxxxxxx,&#10;xxxxxxx&#10;xxxxxx,&#10;xxxxxx"
+                                      style="width: 100%; padding: 0.5rem; background: #2b2b2b; border: 1px solid #333; color: #fff; border-radius: 4px; resize: vertical; font-family: inherit; line-height: 1.5;">${cfg.server_prompt !== undefined && cfg.server_prompt !== null ? cfg.server_prompt : (cfg.system_prompt || '')}</textarea>
+                            <small style="color: #888; display: block; margin-top: 0.35rem; line-height: 1.4;">
+                                提示詞採累加機制儲存。每條提示詞以逗號（,）結尾進行區隔；若換行末尾沒有“,”代表屬於同一條提示詞。
+                            </small>
+                        </div>
+
+                        <button onclick="saveAISettings()" class="btn btn-primary" style="padding: 0.5rem 1.25rem;">儲存基本設定</button>
+                    </div>
+
+                    <!-- 身分組每日可用訊息額度控制 -->
+                    <div style="background: #1a1a1a; padding: 1.25rem; border-left: 3px solid #2563eb; border-radius: 4px; margin-bottom: 1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                            <div>
+                                <h3 style="color: #fff; margin: 0; font-size: 1rem;">身分組可用訊息額度控制</h3>
+                                <p style="color: #888; font-size: 0.8rem; margin: 0.25rem 0 0 0;">可針對伺服器身分組自訂每日可用次數。多身分組用戶將自動取最高配額；輸入 <strong>-1</strong> 代表無限制。</p>
+                            </div>
+                            <button onclick="saveAIRoles()" class="btn btn-primary" style="padding: 0.4rem 1rem;">儲存身分組額度</button>
+                        </div>
+
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid #333; color: #888;">
+                                        <th style="padding: 0.5rem 0.75rem;">身分組名稱</th>
+                                        <th style="padding: 0.5rem 0.75rem;">身分組 ID</th>
+                                        <th style="padding: 0.5rem 0.75rem;">每日文字配額 (條/天)</th>
+                                        <th style="padding: 0.5rem 0.75rem;">每日圖片配額 (條/天)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rolesRowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 用戶封禁名單與記憶管理 -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        <!-- 黑名單管理 -->
+                        <div style="background: #1a1a1a; padding: 1.25rem; border-left: 3px solid #dc2626; border-radius: 4px;">
+                            <h3 style="color: #fff; margin-top: 0; margin-bottom: 0.75rem; font-size: 1rem;">AI 聊天封禁名單</h3>
+                            <p style="color: #888; font-size: 0.8rem; margin-bottom: 1rem;">被封禁的成員將無法在伺服器使用 AI 聊天與 @提及 功能。</p>
+
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                                <input type="text" id="ai-ban-uid" placeholder="用戶 Discord ID" 
+                                       style="flex: 1; padding: 0.4rem 0.6rem; background: #2b2b2b; border: 1px solid #333; color: #fff; border-radius: 4px; font-size: 0.85rem;">
+                                <input type="text" id="ai-ban-reason" placeholder="原因 (可選)" 
+                                       style="flex: 1; padding: 0.4rem 0.6rem; background: #2b2b2b; border: 1px solid #333; color: #fff; border-radius: 4px; font-size: 0.85rem;">
+                                <button onclick="banAIUser()" class="btn btn-danger" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; white-space: nowrap;">封禁</button>
+                                <button onclick="unbanAIUserFromInput()" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; white-space: nowrap;">解封</button>
+                            </div>
+
+                            <div style="max-height: 250px; overflow-y: auto;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid #333; color: #888;">
+                                            <th style="padding: 0.4rem 0.5rem;">用戶</th>
+                                            <th style="padding: 0.4rem 0.5rem;">原因</th>
+                                            <th style="padding: 0.4rem 0.5rem;">封禁時間</th>
+                                            <th style="padding: 0.4rem 0.5rem; text-align:right;">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${bannedRowsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 記憶重置工具 -->
+                        <div style="background: #1a1a1a; padding: 1.25rem; border-left: 3px solid #f59e0b; border-radius: 4px;">
+                            <h3 style="color: #fff; margin-top: 0; margin-bottom: 0.75rem; font-size: 1rem;">管理員對話記憶重置</h3>
+                            <p style="color: #888; font-size: 0.8rem; margin-bottom: 1rem;">可手動清空指定用戶與 AI 的歷史上下文對話記憶，重置其對話狀態。</p>
+
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display:block; color:#ccc; font-size:0.85rem; margin-bottom:0.4rem;">欲清空之用戶 Discord ID</label>
+                                <div style="display:flex; gap:0.5rem;">
+                                    <input type="text" id="ai-clear-mem-uid" placeholder="輸入用戶 ID" 
+                                           style="flex:1; padding:0.4rem 0.6rem; background:#2b2b2b; border:1px solid #333; color:#fff; border-radius:4px; font-size:0.85rem;">
+                                    <button onclick="clearAIMemory()" class="btn btn-warning" style="padding:0.4rem 0.8rem; font-size:0.85rem; white-space:nowrap;">清空記憶</button>
+                                </div>
+                            </div>
+                            <div style="background:#242424; padding:0.75rem; border-radius:4px; color:#888; font-size:0.8rem; line-height:1.4;">
+                                提示：用戶本人也可在 Discord 頻道中使用 <code>/ai 清空記憶</code> 隨時自行重置對話上下文。
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('載入 AI 聊天設定失敗:', error);
+                document.getElementById('ai-chat-data').innerHTML = `<p style="color: #dc2626;">載入失敗: ${error.message}</p>`;
+            }
+        }
+
+        async function toggleAIChat(enabled) {
+            try {
+                const res = await fetch('/api/ai/' + GUILD_ID + '/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadAIChat();
+                } else {
+                    alert('切換失敗: ' + (data.error || '未知錯誤'));
+                    loadAIChat();
+                }
+            } catch (e) {
+                alert('網路錯誤: ' + e.message);
+                loadAIChat();
+            }
+        }
+
+        async function saveAISettings() {
+            let dailyLimit = parseInt(document.getElementById('ai-daily-limit').value) || 1500;
+            dailyLimit = Math.min(Math.max(dailyLimit, 200), 3000);
+            let defaultRoleLimit = parseInt(document.getElementById('ai-default-role-limit').value) || 85;
+            defaultRoleLimit = Math.min(Math.max(defaultRoleLimit, 20), 500);
+            let defaultImageLimit = parseInt(document.getElementById('ai-default-image-limit').value);
+            if (isNaN(defaultImageLimit)) defaultImageLimit = 25;
+            defaultImageLimit = Math.min(Math.max(defaultImageLimit, 0), 100);
+            let defaultDrawLimit = parseInt(document.getElementById('ai-default-draw-limit')?.value);
+            if (isNaN(defaultDrawLimit)) defaultDrawLimit = 20;
+            defaultDrawLimit = Math.min(Math.max(defaultDrawLimit, 0), 100);
+            const persona = document.getElementById('ai-persona') ? document.getElementById('ai-persona').value : 'normal';
+            const serverPrompt = document.getElementById('ai-system-prompt').value;
+
+            try {
+                const res = await fetch('/api/ai/' + GUILD_ID + '/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        daily_limit: dailyLimit,
+                        default_role_limit: defaultRoleLimit,
+                        default_image_limit: defaultImageLimit,
+                        default_draw_limit: defaultDrawLimit,
+                        persona: persona,
+                        server_prompt: serverPrompt,
+                        system_prompt: serverPrompt
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.notice || 'AI 基本設定已成功儲存！');
+                    loadAIChat();
+                } else {
+                    alert('儲存失敗: ' + (data.error || '未知錯誤'));
+                }
+            } catch (e) {
+                alert('網路錯誤: ' + e.message);
+            }
+        }
+
+        async function saveAIRoles() {
+            const roleLimits = {};
+            const imageRoleLimits = {};
+            currentAIRoles.forEach(role => {
+                const input = document.getElementById('role-limit-' + role.id);
+                if (input && input.value !== '') {
+                    let val = parseInt(input.value);
+                    if (val !== -1) {
+                        val = Math.min(Math.max(val, 20), 500);
+                    }
+                    roleLimits[role.id] = val;
+                }
+                const imgInput = document.getElementById('role-image-limit-' + role.id);
+                if (imgInput && imgInput.value !== '') {
+                    let imgVal = parseInt(imgInput.value);
+                    if (imgVal !== -1) {
+                        imgVal = Math.min(Math.max(imgVal, 0), 100);
+                    }
+                    imageRoleLimits[role.id] = imgVal;
+                }
+            });
+
+            try {
+                const res = await fetch('/api/ai/' + GUILD_ID + '/roles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        role_limits: roleLimits,
+                        image_role_limits: imageRoleLimits
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('身分組可用訊息額度已更新！');
+                    loadAIChat();
+                } else {
+                    alert('更新失敗: ' + (data.error || '未知錯誤'));
+                }
+            } catch (e) {
+                alert('網路錯誤: ' + e.message);
+            }
+        }
+
+        async function banAIUser() {
+            const userId = document.getElementById('ai-ban-uid').value.trim();
+            const reason = document.getElementById('ai-ban-reason').value.trim() || '網頁控制台封禁';
+
+            if (!userId) {
+                alert('請輸入欲封禁的用戶 Discord ID！');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/ai/' + GUILD_ID + '/ban', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, reason })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('已成功封禁該用戶！');
+                    loadAIChat();
+                } else {
+                    alert('封禁失敗: ' + (data.error || '未知錯誤'));
+                }
+            } catch (e) {
+                alert('網路錯誤: ' + e.message);
+            }
+        }
+
+        async function unbanAIUser(userId, btnEl) {
+            const rawId = decodeURIComponent(userId).trim();
+            if (!rawId) return;
+
+            try {
+                if (window.confirm && !confirm(`確定要解除用戶 ${rawId} 的 AI 聊天封禁嗎？`)) {
+                    return;
+                }
+            } catch (e) {}
+
+            if (btnEl) {
+                btnEl.disabled = true;
+                btnEl.textContent = '解封中...';
+            }
+
+            try {
+                let res = await fetch(`/api/ai/${GUILD_ID}/ban/${encodeURIComponent(rawId)}`, {
+                    method: 'DELETE'
+                });
+                if (!res.ok && res.status !== 401 && res.status !== 403) {
+                    res = await fetch(`/api/ai/${GUILD_ID}/unban/${encodeURIComponent(rawId)}`, {
+                        method: 'POST'
+                    });
+                }
+                const data = await res.json();
+                if (data.success) {
+                    alert(`已成功解封用戶 ${rawId}！`);
+                    loadAIChat();
+                } else {
+                    alert('解封失敗: ' + (data.error || '未知錯誤'));
+                    if (btnEl) {
+                        btnEl.disabled = false;
+                        btnEl.textContent = '解封';
+                    }
+                }
+            } catch (e) {
+                alert('網路錯誤: ' + e.message);
+                if (btnEl) {
+                    btnEl.disabled = false;
+                    btnEl.textContent = '解封';
+                }
+            }
+        }
+
+        async function unbanAIUserFromInput() {
+            const inputEl = document.getElementById('ai-ban-uid');
+            const userId = inputEl ? inputEl.value.trim() : '';
+            if (!userId) {
+                alert('請先在左方輸入框填寫欲解封的用戶 Discord ID！');
+                return;
+            }
+            await unbanAIUser(userId);
+            if (inputEl) inputEl.value = '';
+            const reasonEl = document.getElementById('ai-ban-reason');
+            if (reasonEl) reasonEl.value = '';
+        }
+
+        async function clearAIMemory() {
+            const userId = document.getElementById('ai-clear-mem-uid').value.trim();
+            if (!userId) {
+                alert('請輸入欲清空記憶的用戶 Discord ID！');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/ai/${GUILD_ID}/memory/${userId}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.cleared ? '已成功重置該用戶的對話記憶！' : '該用戶目前無對話記憶。');
+                    document.getElementById('ai-clear-mem-uid').value = '';
+                } else {
+                    alert('操作失敗: ' + (data.error || '未知錯誤'));
+                }
+            } catch (e) {
+                alert('網路錯誤: ' + e.message);
+            }
+        }
+
         // 頁面載入時執行
         loadStats();
         loadLevels();
@@ -2048,6 +2832,21 @@
         loadWarnings();
         loadAchievements();
         loadTickets();
+        loadAIChat();
+
+        // 初始載入與切換至指定功能區塊 (支援 /dashboard/<id>/<功能> 立即查看)
+        const initSection = getInitialSection();
+        showSection(initSection, null, false);
+        if (window.history && window.history.replaceState) {
+            const canonicalPath = `/dashboard/${GUILD_ID}/${initSection}`;
+            window.history.replaceState({ section: initSection }, '', canonicalPath);
+        }
+
+        // 監聽瀏覽器上一頁 / 下一頁 (popstate)
+        window.addEventListener('popstate', (e) => {
+            const sec = (e.state && e.state.section) ? e.state.section : getInitialSection();
+            showSection(sec, null, false);
+        });
         
         // 每30秒更新一次數據
         setInterval(() => {
@@ -2063,6 +2862,7 @@
             loadWarnings();
             loadAchievements();
             loadTickets();
+            loadAIChat();
         }, 30000);
     </script>
 </body>

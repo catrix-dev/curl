@@ -1,6 +1,8 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+import json
+import os
 from datetime import timedelta
 import re
 
@@ -9,11 +11,15 @@ class SecuritySystem(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
-        self.storage = bot.storage
+        self.data_folder = "./data"
         
     def get_security_data(self, guild_id):
         """獲取安全設定數據"""
-        return self.storage.load_guild_data(guild_id, 'security', default={
+        filepath = f"{self.data_folder}/{guild_id}/security.json"
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {
             "enabled": True,
             "banned_words": [],
             "timeout_duration": 60,  # 秒
@@ -22,11 +28,16 @@ class SecuritySystem(commands.Cog):
             "whitelist_channels": [],  # 白名單頻道 ID
             "case_sensitive": False,  # 是否區分大小寫
             "match_type": "contains"  # contains, exact, regex
-        })
+        }
     
     def save_security_data(self, guild_id, data):
         """保存安全設定數據"""
-        self.storage.save_guild_data(guild_id, 'security', data)
+        folder = f"{self.data_folder}/{guild_id}"
+        os.makedirs(folder, exist_ok=True)
+        
+        filepath = f"{folder}/security.json"
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
     
     def check_banned_word(self, content, banned_words, case_sensitive=False, match_type="contains"):
         """檢查是否包含違禁詞"""

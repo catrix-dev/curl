@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html class="light scroll-smooth" lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>隱私權政策 (Privacy Policy) — curl Bot</title>
+  <meta name="description" content="curl 是功能強大的 Discord 多功能機器人。官方隱私權政策透明揭露所有資料庫儲存欄位與安全防護機制。" />
+  <meta name="author" content="curl Development Team" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://curlbot.cat6666.me/privacy.html" />
+  <meta property="og:title" content="隱私權政策 (Privacy Policy) — curl Bot" />
+  <meta property="og:description" content="curl 機器人官方隱私權政策，透明揭露所有資料庫儲存欄位與安全防護機制。" />
+  <meta property="og:image" content="icon.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="隱私權政策 (Privacy Policy) — curl Bot" />
+  <meta name="twitter:description" content="curl 機器人官方隱私權政策，透明揭露所有資料庫儲存欄位與安全防護機制。" />
+  <meta name="twitter:image" content="icon.png" />
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0d091a" media="(prefers-color-scheme: dark)" />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+
+  <!-- Anti-FOUC Theme Script -->
+  <script>
+    (function() {
+      try {
+        var stored = localStorage.getItem('curl-theme') || localStorage.getItem('catbot-theme');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = stored === 'dark' || (!stored && prefersDark);
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light');
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.classList.add('light');
+          document.documentElement.classList.remove('dark');
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      } catch (e) {}
+    })();
+  </script>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com" rel="preconnect">
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind Config -->
+  <script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          primary: {
+            DEFAULT: "#2563eb",
+            50: "#eff6ff",
+            100: "#dbeafe",
+            200: "#bfdbfe",
+            300: "#93c5fd",
+            400: "#60a5fa",
+            500: "#3b82f6",
+            600: "#2563eb",
+            700: "#1d4ed8",
+            800: "#1e40af",
+            900: "#1e3a8a"
+          }
+        },
+        fontFamily: {
+          sans: ['"Noto Sans TC"', '"Plus Jakarta Sans"', 'sans-serif']
+        }
+      }
+    }
+  }
+  </script>
+
+  <!-- Essential Component Styles -->
+  <style>
+    .ambient-glow-orb { position: absolute; border-radius: 9999px; filter: blur(80px); pointer-events: none; }
+    .back-to-top { position: fixed; bottom: 2rem; right: 2rem; width: 3rem; height: 3rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; z-index: 40; opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .back-to-top.visible { opacity: 1; pointer-events: auto; }
+    .toast-notice { position: fixed; bottom: 5rem; right: 2rem; z-index: 50; padding: 0.75rem 1.25rem; border-radius: 0.75rem; font-size: 0.875rem; background: rgba(18, 13, 34, 0.95); color: #fff; border: 1px solid rgba(59, 130, 246, 0.3); backdrop-filter: blur(8px); transform: translateY(20px); opacity: 0; pointer-events: none; transition: all 0.3s ease; }
+    .toast-notice.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  </style>
+</head>
+<body class="font-sans antialiased text-slate-900 dark:text-slate-100 bg-[#fbfaff] dark:bg-[#0d091a] selection:bg-blue-600 selection:text-white relative min-h-screen transition-colors duration-200">
+
+  <!-- Ambient Glow -->
+  <div class="ambient-glow-orb bg-blue-600/15 w-80 h-80 top-10 left-1/4 -translate-x-1/2"></div>
+
+  <!-- Header / Navigation -->
+  <nav class="sticky top-0 z-50 w-full bg-white/95 dark:bg-[#120d22]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 transition-colors duration-200">
+    <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+      <!-- Brand Logo -->
+      <a class="flex items-center gap-3 group" href="/">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center group-hover:bg-blue-700 transition-colors duration-200 shadow-sm overflow-hidden p-0.5">
+          <img src="icon.png" alt="curl Logo" class="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform" />
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">curl Bot</span>
+          <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 cfg-version">v7.0.0</span>
+        </div>
+      </a>
+
+      <!-- Desktop Nav Links -->
+      <div class="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600 dark:text-slate-300">
+        <a class="hover:text-purple-700 dark:hover:text-purple-400 transition-colors duration-150 flex items-center gap-1" href="index.html">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+          <span>返回首頁</span>
+        </a>
+        <a class="hover:text-purple-700 dark:hover:text-purple-400 transition-colors duration-150" href="index.html#features">功能特色</a>
+        <a class="hover:text-purple-700 dark:hover:text-purple-400 transition-colors duration-150" href="index.html#commands">常用指令</a>
+        <a class="hover:text-purple-700 dark:hover:text-purple-400 transition-colors duration-150" href="terms.html">服務條款</a>
+        <a class="text-purple-700 dark:text-purple-400 font-bold transition-colors duration-150" href="privacy.html">隱私政策</a>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center gap-3">
+        <!-- Theme Toggle Button -->
+        <button id="theme-toggle" class="p-2.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/40 text-slate-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition-colors cursor-pointer" type="button" aria-label="切換深淺模式" title="切換深淺模式">
+          <span class="theme-toggle-icon text-base leading-none">🌙</span>
+        </button>
+
+        <!-- Join Discord Button -->
+        <a class="px-5 py-2.5 rounded-full bg-purple-700 hover:bg-purple-800 active:bg-purple-900 flex items-center gap-2 text-sm font-semibold text-white transition-all shadow-sm hover:shadow-purple-500/25 cfg-invite-link" href="#" target="_blank" rel="noopener noreferrer">
+          <span>加入伺服器 🐾</span>
+          <svg class="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 24 24">
+            <line x1="5" x2="19" y1="12" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </a>
+
+        <!-- Mobile Menu Toggle Button -->
+        <button id="mobile-menu-toggle" class="lg:hidden p-2.5 rounded-xl border border-purple-200 dark:border-purple-800 text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-purple-900/40 transition-colors" type="button" aria-label="開啟選單">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Dropdown Menu -->
+    <div id="mobile-menu" class="hidden lg:hidden px-6 py-4 border-t border-purple-100 dark:border-purple-900/40 bg-white dark:bg-[#120d22] flex flex-col gap-3 text-sm font-medium">
+      <a class="hover:text-purple-700 dark:hover:text-purple-400 py-1.5" href="index.html">返回首頁</a>
+      <a class="hover:text-purple-700 dark:hover:text-purple-400 py-1.5" href="index.html#features">功能特色</a>
+      <a class="hover:text-purple-700 dark:hover:text-purple-400 py-1.5" href="index.html#commands">常用指令</a>
+      <a class="hover:text-purple-700 dark:hover:text-purple-400 py-1.5" href="terms.html">服務條款</a>
+      <a class="text-purple-700 dark:text-purple-400 font-bold py-1.5" href="privacy.html">隱私政策</a>
+    </div>
+  </nav>
+
+  <main class="relative z-10">
+    <!-- Document Header & Breadcrumbs -->
+    <section class="py-12 md:py-16 bg-white dark:bg-[#120d22] border-b border-purple-100 dark:border-purple-900/50 transition-colors duration-200">
+      <div class="max-w-4xl mx-auto px-6">
+        <!-- Breadcrumb -->
+        <nav class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-4" aria-label="麵包屑導航">
+          <a href="index.html" class="hover:text-purple-700 dark:hover:text-purple-300">首頁</a>
+          <span>/</span>
+          <span class="text-purple-700 dark:text-purple-400 font-semibold">隱私權政策</span>
+        </nav>
+
+        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">隱私安全合規</span>
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white mt-3 tracking-tight">隱私權政策與個人資料保護規範</h1>
+        <div class="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+          <span>生效日期：2026 年 09 月 01 日</span>
+          <span class="text-purple-300 dark:text-purple-700">•</span>
+          <span>最新修訂：2026 年 09 月 05 日</span>
+          <span class="text-purple-300 dark:text-purple-700">•</span>
+          <span class="font-medium text-purple-700 dark:text-purple-400">適用規範：歐盟 GDPR / 台灣個人資料保護法</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Document Content -->
+    <article class="max-w-4xl mx-auto px-6 py-12 text-slate-700 dark:text-slate-300 leading-relaxed">
+      <!-- Privacy Callout -->
+      <div class="p-6 rounded-2xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 mb-10 shadow-sm">
+        <div class="font-bold text-base text-purple-900 dark:text-purple-200 mb-2 flex items-center gap-2">
+          <span>🛡️</span>
+          <span>我們的核心隱私承諾</span>
+        </div>
+        <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-0">
+          貓貓機器人 (CatBot 2.0) 團隊高度重視您的個人隱私與資料安全。我們遵循<strong>「最小化資料蒐集原則」</strong>，僅儲存維持服務運作所需的最少資料。所有資料均保存在安全隔離的伺服器本地 SQLite WAL 資料庫中，<strong>絕不轉售、分享、出租或用於任何廣告追蹤與商業側寫</strong>。
+        </p>
+      </div>
+
+      <!-- Section 1 -->
+      <section class="mb-12">
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white pb-3 border-b border-purple-100 dark:border-purple-900/50 mb-4 tracking-tight">一、資料蒐集範圍與保存項目 (公開透明清單)</h2>
+        <p class="text-sm mb-4">
+          依據本機器人之系統原始碼 (<code>src/utils/db.js</code>)，當您使用機器人時，系統僅在必要範圍內記錄以下項目：
+        </p>
+
+        <div class="overflow-x-auto rounded-xl border border-purple-200 dark:border-purple-800/80 shadow-sm mb-6">
+          <table class="w-full text-left text-xs text-slate-700 dark:text-slate-300 divide-y divide-purple-100 dark:divide-purple-900/50">
+            <thead class="bg-purple-50 dark:bg-purple-950/60 font-semibold text-slate-900 dark:text-white">
+              <tr>
+                <th class="p-3.5 w-1/4">資料庫資料表</th>
+                <th class="p-3.5 w-1/3">儲存內容與欄位</th>
+                <th class="p-3.5">保存目的與生命週期</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-purple-100/60 dark:divide-purple-900/30 bg-white dark:bg-[#181130]">
+              <tr>
+                <td class="p-3.5 font-mono text-purple-700 dark:text-purple-400 font-semibold">ai_memory</td>
+                <td class="p-3.5">Discord User ID、角色 (User/Bot)、對話內容、時間戳記</td>
+                <td class="p-3.5">提供連續自然的多輪 AI 對話上下文。系統僅保留最近 <strong>50 則對話</strong>，逾時或手動清除後自動修剪抹除。</td>
+              </tr>
+              <tr>
+                <td class="p-3.5 font-mono text-purple-700 dark:text-purple-400 font-semibold">user_longterm_memories</td>
+                <td class="p-3.5">Discord User ID、使用者主動記錄之偏好內容、時間戳記</td>
+                <td class="p-3.5">儲存您透過 <code>/記憶系統</code> 指令主動請 AI 記住的個人喜好（例如稱呼、寫作風格等）。</td>
+              </tr>
+              <tr>
+                <td class="p-3.5 font-mono text-purple-700 dark:text-purple-400 font-semibold">user_custom_personas</td>
+                <td class="p-3.5">Discord User ID、槽位編號 (1~3)、人設名稱、自訂 Prompt</td>
+                <td class="p-3.5">儲存您透過 <code>/製作人設</code> 建立的客製化 AI 提示詞，最多 3 組。</td>
+              </tr>
+              <tr>
+                <td class="p-3.5 font-mono text-purple-700 dark:text-purple-400 font-semibold">ai_user_persona<br>ai_user_model</td>
+                <td class="p-3.5">Discord User ID、當前選擇之人設鍵值與偏好模型鍵值</td>
+                <td class="p-3.5">記錄您個人當前偏好的對話風格與模型路由偏好。</td>
+              </tr>
+              <tr>
+                <td class="p-3.5 font-mono text-purple-700 dark:text-purple-400 font-semibold">ai_user_quota<br>ai_guild_quota</td>
+                <td class="p-3.5">User ID / Guild ID、日期字串 (YYYY-MM-DD)、當日累計調用次數</td>
+                <td class="p-3.5">落實公平使用防護（個人 <span class="cfg-quota-user font-semibold">80 句/日</span>、伺服器 <span class="cfg-quota-guild font-semibold">500 句/日</span>）。每日 00:00 自動歸零重計。</td>
+              </tr>
+              <tr>
+                <td class="p-3.5 font-mono text-purple-700 dark:text-purple-400 font-semibold">warnings</td>
+                <td class="p-3.5">Guild ID、受處分成員 ID、處分原因、執行管理員 ID 與 Tag、時間戳記</td>
+                <td class="p-3.5">提供個別 Discord 伺服器管理員查詢與維護社群違規紀錄，僅於該伺服器內調用。</td>
+              </tr>
+              <tr>
+                <td class="p-3.5 font-mono text-purple-700 dark:text-purple-400 font-semibold">tickets</td>
+                <td class="p-3.5">Guild ID、頻道 ID、開單成員 ID、問題分類、標題、狀態、關閉者</td>
+                <td class="p-3.5">客服單工單流轉管理，關閉時可由工作人員匯出 HTML Transcript 結案存檔。</td>
+              </tr>
+              <tr>
+                <td class="p-3.5 font-mono text-purple-700 dark:text-purple-400 font-semibold">guild_settings<br>banned_words</td>
+                <td class="p-3.5">Guild ID、歡迎頻道 ID、自訂歡迎詞與背景圖、伺服器違禁詞清單</td>
+                <td class="p-3.5">個別伺服器管理員自訂之自動化設定，供歡迎模組與防護系統比對使用。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Section 2 -->
+      <section class="mb-12">
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white pb-3 border-b border-purple-100 dark:border-purple-900/50 mb-4 tracking-tight">二、我們絕對不會蒐集的資料 (What We Never Collect)</h2>
+        <p class="text-sm mb-3">為消弭使用者對機器人隱私之疑慮，本團隊鄭重聲明：</p>
+        <ul class="space-y-2.5 pl-5 list-disc text-sm">
+          <li><strong>絕不常規竊聽私訊 (DMs)</strong>：機器人絕不會監聽或記錄使用者的私人訊息，除非您在私訊中主動向機器人發起對話或下達指令。</li>
+          <li><strong>絕不儲存密碼生成結果</strong>：透過 <code>/休閒娛樂 密碼生成</code> 所產生的隨機安全密碼，純粹於伺服器記憶體中透過密碼學安全函式即時運算，並以「僅您可見 (Ephemeral)」訊息回傳，<strong>不寫入任何日誌或資料庫</strong>。</li>
+          <li><strong>絕不蒐集真實姓名與實體身分</strong>：我們不索取亦不擁有您的真實身分證字號、護照、實體地址、銀行帳號或信用卡資料。</li>
+          <li><strong>絕不販售資料給第三方</strong>：我們絕不會將您的對話內容或 Discord ID 提供予廣告商、數據仲介商進行商業變現。</li>
+        </ul>
+      </section>
+
+      <!-- Section 3 -->
+      <section class="mb-12">
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white pb-3 border-b border-purple-100 dark:border-purple-900/50 mb-4 tracking-tight">三、第三方服務串接與資料傳輸說明</h2>
+        <p class="text-sm mb-3">
+          本機器人為實現進階 AI 推理、即時氣象與大眾交通時刻查詢，會透過端到端加密連線 (HTTPS/TLS) 與以下第三方合作夥伴進行最小化資料傳輸：
+        </p>
+        <ul class="space-y-2.5 pl-5 list-disc text-sm">
+          <li><strong>OpenRouter / OpenAI / Google Gemini</strong>：當您與 AI 進行對話或生成圖片時，您當前的訊息及最近上下文會以加密格式傳輸至模型推論伺服器。依據官方 API 服務條款，這些 API 調用資料<strong>預設不會被用於公開大模型之二次訓練</strong>。</li>
+          <li><strong>中華民國交通部中央氣象署 (CWA) / Open-Meteo</strong>：在您查詢天氣或地震速報時，僅會傳遞欲查詢之縣市名稱或地理座標，絕不包含任何使用者個人資訊。</li>
+          <li><strong>台灣高鐵 (THSR) / 台灣鐵路 (TRA) 查詢服務</strong>：僅傳送起訖車站代碼或車次編號進行時刻與票價檢索。</li>
+          <li><strong>Cloudflare Turnstile (人機驗證)</strong>：在少數防範惡意自動化機器人濫用之情境下，僅驗證瀏覽器人機 Token，用於確認為真實人類使用者。</li>
+        </ul>
+      </section>
+
+      <!-- Section 4 -->
+      <section id="gdpr" class="mb-12">
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white pb-3 border-b border-purple-100 dark:border-purple-900/50 mb-4 tracking-tight">四、歐盟 GDPR「被遺忘權」與一鍵抹除機制 (Right to be Forgotten)</h2>
+        <p class="text-sm mb-4">
+          貓貓機器人全面落實歐盟《一般資料保護規範》(GDPR) 第 17 條賦予之「被遺忘權（刪除權）」。您隨時擁有對自身個人資料的最高掌控權，無需填寫冗長表單或寄信申請：
+        </p>
+
+        <div class="p-6 rounded-2xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 shadow-sm">
+          <div class="font-bold text-sm text-purple-900 dark:text-purple-200 mb-3 flex items-center gap-2">
+            <span>🗑️</span>
+            <span>如何一鍵徹底清除屬於您的所有資料？</span>
+          </div>
+          <ol class="space-y-2.5 pl-5 list-decimal text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+            <li>在任何有貓貓機器人的 Discord 頻道中輸入斜線指令：<code>/使用條款</code></li>
+            <li>機器人將回傳一個<strong>僅您自己看得到</strong>的個人隱私面版，即時統計您目前在系統中的資料筆數（短期對話數、長期記憶數、自訂人設槽位數）。</li>
+            <li>點擊面板下方的紅色按鈕：<strong>「🗑️ 永久清除並抹除我的所有個人資料」</strong>。</li>
+            <li>系統將立即啟動 SQLite ACID 資料庫事務鎖，<strong>原子化、永久且無可挽回地徹底刪除</strong>您在 <code>ai_memory</code>、<code>user_longterm_memories</code>、<code>user_custom_personas</code>、<code>ai_user_persona</code> 與 <code>ai_user_model</code> 中的所有紀錄！</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Section 5 -->
+      <section class="mb-12">
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white pb-3 border-b border-purple-100 dark:border-purple-900/50 mb-4 tracking-tight">五、技術安全防護措施 (Security Measures)</h2>
+        <p class="text-sm mb-3">為防止未經授權之存取、外洩、竄改或破壞，本機器人實施下列多層架構防護：</p>
+        <ul class="space-y-2.5 pl-5 list-disc text-sm">
+          <li><strong>SQLite 3 WAL 引擎事務隔離</strong>：所有資料存取皆透過參數化查詢 (Prepared Statements) 與 <code>transaction()</code> 交易鎖封裝，徹底杜絕 SQL 注入攻擊。</li>
+          <li><strong>SSRF (伺服器端請求偽造) 內網防禦</strong>：在執行網頁抓取或 Agent 瀏覽時，自動攔截並阻斷對 <code>127.0.0.1</code>、<code>10.0.0.0/8</code>、<code>192.168.0.0/16</code> 等內網私有 IP 之連線請求。</li>
+          <li><strong>Zip Bomb 炸彈解壓縮防護</strong>：嚴格限制上傳檔案之解壓展開比例與單檔上限，防止記憶體耗盡型攻擊。</li>
+          <li><strong>Docker 安全沙箱環境</strong>：使用者執行程式碼測試時，均於資源受限（限制 CPU、記憶體與網路連線）之獨立容器內運作，並於 1 分鐘後自動強制銷毀。</li>
+        </ul>
+      </section>
+
+      <!-- Section 6 -->
+      <section class="mb-12">
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white pb-3 border-b border-purple-100 dark:border-purple-900/50 mb-4 tracking-tight">六、政策修訂與隱私諮詢管道</h2>
+        <p class="text-sm mb-3">
+          本隱私權政策可能隨技術升級、法規要求或新功能上線而進行滾動式修訂。重大實質變更將在官方社群伺服器進行公告。
+        </p>
+        <p class="text-sm mb-3">
+          若您對本隱私政策有任何疑問、希望查詢特定資料，或欲提出隱私保護建議，歡迎透過以下管道聯絡：
+        </p>
+        <ul class="space-y-2 pl-5 list-disc text-sm">
+          <li><strong>官方 Discord 支援伺服器</strong>：<a href="#" class="text-purple-700 dark:text-purple-400 font-semibold hover:underline cfg-support-link" target="_blank" rel="noopener noreferrer">點此進入隱私反饋頻道</a></li>
+          <li><strong>GitHub 開源專案</strong>：<a href="#" class="text-purple-700 dark:text-purple-400 font-semibold hover:underline cfg-github-link" target="_blank" rel="noopener noreferrer">GitHub Security Advisories / Issues</a></li>
+          <li><strong>隱私合規信箱</strong>：<a href="mailto:support@catbot.dev" class="text-purple-700 dark:text-purple-400 font-semibold hover:underline cfg-contact-email">support@catbot.dev</a></li>
+        </ul>
+      </section>
+    </article>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#120d22] relative z-10 transition-colors duration-200">
+    <div class="max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row justify-between items-center gap-6 text-sm">
+      <!-- Left: Brand Info -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center overflow-hidden p-0.5 shadow-sm">
+          <img src="icon.png" alt="curl Logo" class="w-full h-full object-cover rounded-lg" />
+        </div>
+        <div>
+          <div class="font-bold text-slate-900 dark:text-white tracking-tight">curl — Discord Bot</div>
+          <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">版權所有 &copy; 2026 curl Bot 團隊。保留所有權利。</div>
+        </div>
+      </div>
+
+      <!-- Right: Navigation Links -->
+      <div class="flex flex-wrap items-center gap-6 text-xs text-slate-600 dark:text-slate-300 font-medium">
+        <a class="text-blue-600 dark:text-blue-400 font-bold transition-colors" href="/privacy">隱私權政策</a>
+        <a class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="/">控制台首頁</a>
+        <a class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="/select-server">選擇伺服器</a>
+        <a class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-bold text-blue-600 dark:text-blue-400" href="https://discord.com/oauth2/authorize?client_id=1470688452784820327&permissions=8&scope=bot%20applications.commands" target="_blank" rel="noopener noreferrer">邀請機器人 🤖</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Floating Back to Top Button -->
+  <button id="back-to-top" class="back-to-top bg-white dark:bg-[#181130] text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-slate-800 shadow-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer" type="button" aria-label="返回頁面頂部" title="返回頂部">
+    <svg class="w-5 h-5 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"></path>
+    </svg>
+  </button>
+
+  <!-- Interactive JavaScript -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // 1. Theme toggle
+      const themeToggle = document.getElementById('theme-toggle');
+      if (themeToggle) {
+        themeToggle.addEventListener('click', function() {
+          const isDark = document.documentElement.classList.contains('dark');
+          if (isDark) {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.add('light');
+            document.documentElement.setAttribute('data-theme', 'light');
+            localStorage.setItem('curl-theme', 'light');
+          } else {
+            document.documentElement.classList.remove('light');
+            document.documentElement.classList.add('dark');
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('curl-theme', 'dark');
+          }
+        });
+      }
+
+      // 2. Mobile menu toggle
+      const mobileToggle = document.getElementById('mobile-menu-toggle');
+      const mobileMenu = document.getElementById('mobile-menu');
+      if (mobileToggle && mobileMenu) {
+        mobileToggle.addEventListener('click', function() {
+          mobileMenu.classList.toggle('hidden');
+        });
+      }
+
+      // 3. Back to top button
+      const backToTop = document.getElementById('back-to-top');
+      if (backToTop) {
+        window.addEventListener('scroll', function() {
+          if (window.scrollY > 300) {
+            backToTop.classList.add('visible');
+          } else {
+            backToTop.classList.remove('visible');
+          }
+        });
+        backToTop.addEventListener('click', function() {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      }
+    });
+  </script>
+</body>
+</html>

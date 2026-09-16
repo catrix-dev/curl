@@ -112,6 +112,18 @@ class HelpSelect(ui.Select):
                 emoji="🏆",
                 value="achievements"
             ),
+            discord.SelectOption(
+                label="AI 聊天",
+                description="查看 AI 智慧對話指令",
+                emoji="🤖",
+                value="ai_chat"
+            ),
+            discord.SelectOption(
+                label="抽獎系統",
+                description="查看伺服器抽獎活動指令",
+                emoji="🎁",
+                value="giveaway"
+            ),
         ]
         super().__init__(
             placeholder="選擇要查看的指令分類...",
@@ -149,7 +161,9 @@ class HelpSelect(ui.Select):
                 "📝 自定義命令\n"
                 "🎤 臨時語音\n"
                 "📋 個人資料\n"
-                "🏆 成就系統"
+                "🏆 成就系統\n"
+                "🤖 AI 聊天\n"
+                "🎁 抽獎系統"
             )
             embed.set_footer(text="此在 Github 中開源")
             
@@ -504,6 +518,101 @@ class HelpSelect(ui.Select):
                 inline=False
             )
         
+        elif self.values[0] == "ai_chat":
+            embed.title = "🤖 AI 聊天系統"
+            embed.description = "整合 OpenRouter (Gemini 3.7 / Claude / Kimi / OpenAI / Qwen / Grok) 與 DeepSeek (V3 / R1)，支援多輪智慧對話、圖片辨識分析、記憶管理與模型自由切換"
+            embed.add_field(
+                name="對話觸發方式",
+                value=(
+                    "• 在伺服器任意文字頻道 **@機器人 [你的問題/附帶圖片]**\n"
+                    "• 直接回覆機器人的訊息進行多輪互動（亦支援附加圖片）\n"
+                    "• 使用 `/ai 聊天 [訊息] [圖片]` 斜線指令"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="一般成員指令",
+                value=(
+                    "`/ai 聊天` - 發送訊息或圖片與 AI 進行對話/辨識\n"
+                    "`/ai 模型` (`/模型`) - 切換個人偏好或全服預設 AI 模型（亦可在對話中直接說「換成gemini 3.7」、「換成claude」、「換成kimi」、「換成grok」等）\n"
+                    "`/ai 人設` (`/人設`) - 切換個人或全服 AI 說話風格與人設\n"
+                    "`/ai 瀏覽器` (`/瀏覽器`) - 召喚瀏覽器代理人深入分析網頁\n"
+                    "`/ai 搜尋` (`/搜尋`) - 互聯網即時聯網檢索與總結\n"
+                    "`/ai 清空記憶` - 清空個人與 AI 的對話上下文紀錄\n"
+                    "`/ai 額度` - 查看目前生效模型、全服今日用量與個人剩餘額度"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="管理員專用指令",
+                value=(
+                    "`/ai 管理 開啟` - 開啟本伺服器的 AI 聊天功能\n"
+                    "`/ai 管理 關閉` - 關閉本伺服器的 AI 聊天功能\n"
+                    "`/ai 管理 設定提示詞` - 新增伺服器專屬 prompt (累加不覆蓋，存於 server-memory.db)\n"
+                    "`/ai 管理 查看提示詞` - 查看本伺服器所有已設定 prompt (含編號)\n"
+                    "`/ai 管理 刪除提示詞` - 刪除指定編號的自訂 prompt\n"
+                    "`/ai 管理 清除提示詞` - 清空所有自訂 prompt 恢復開發者預設人設\n"
+                    "`/ai 管理 清空用戶記憶` - 清空指定成員的對話紀錄\n"
+                    "`/ai 管理 封禁用戶` - 禁止指定成員使用本服 AI 功能\n"
+                    "`/ai 管理 解封用戶` - 解除成員的 AI 聊天封禁\n"
+                    "`/ai 管理 伺服器上限` - 設定每日全服上限 (範圍 200-2000 條，預設 500 條)"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="開發者專用指令",
+                value=(
+                    "`/ai 開發者 寫入記憶` - 寫入持久背景記憶至 bot-memory.db\n"
+                    "`/ai 開發者 查看記憶` - 查看已記錄之全域核心記憶\n"
+                    "`/ai 開發者 刪除記憶` - 刪除指定主題核心記憶\n"
+                    "`/ai 開發者 清空記憶庫` - 清空所有核心記憶庫\n"
+                    "`/ai 開發者 待審批上限` - 查看待審批的伺服器上限提升申請\n"
+                    "`/ai 開發者 審核上限` - 批准或駁回上限申請 (可自訂額度)\n"
+                    "`/ai 開發者 設定群上限` - 直接指定伺服器每日上限 (範圍 200-2000 條)"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="Web 控制台設定",
+                value="伺服器管理員可前往 Web 控制台自訂各身分組配額、系統提示詞及黑名單。",
+                inline=False
+            )
+            
+        elif self.values[0] == "giveaway":
+            embed.title = "🎁 抽獎系統"
+            embed.description = "伺服器福利與抽獎活動管理，支援動態倒數、按鈕一鍵參加與自動開獎"
+            embed.add_field(
+                name="抽獎指令清單 (管理權限)",
+                value=(
+                    "`/抽獎 發起` - 發起新抽獎 (可設定獎品、時長、名額、門檻身分組/等級/今日發言數與說明)\n"
+                    "`/抽獎 結束` - 提前手動結束指定抽獎並立即抽出得主\n"
+                    "`/抽獎 重抽` - 為已結束的抽獎重新抽選 1 位或多位新得獎者\n"
+                    "`/抽獎 取消` - 取消進行中的抽獎活動 (不開獎)\n"
+                    "`/抽獎 列表` - 查看本伺服器目前進行中的所有抽獎清單"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="多樣化參加門檻 (發起時選填)",
+                value=(
+                    "• **資格身分組**：限定持有特定身分組之成員才能參加\n"
+                    "• **最低等級**：需達到指定等級門檻 (例如: Lv.5)\n"
+                    "• **今日發言要求**：當天在伺服器發言需達指定句數 (例如: 3 句)\n"
+                    "• **歷史發言要求**：累積總發言需達到指定句數"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="時長格式範例",
+                value="• `30s` (30秒) • `10m` (10分鐘) • `2h` (2小時) • `1d` (1天) • `1w` (1週)",
+                inline=False
+            )
+            embed.add_field(
+                name="互動特色",
+                value="成員點擊卡片下方的 **「🎉 參加抽獎」** 按鈕系統將自動驗證所有門檻，資格不符者將清楚私密提示不足之處；亦可點擊 **「👥 參加名單」** 查看成員。重啟後按鈕依然有效！",
+                inline=False
+            )
+        
         await interaction.response.edit_message(embed=embed, view=self.view)
 
 class HelpView(ui.View):
@@ -559,7 +668,7 @@ class General(commands.Cog):
     async def botinfo(self, interaction: discord.Interaction):
         """顯示機器人系統資訊"""
         # 獲取系統資訊
-        cpu_percent = psutil.cpu_percent(interval=1)
+        cpu_percent = psutil.cpu_percent(interval=None)
         memory = psutil.virtual_memory()
         disk = psutil.disk_usage('/')
         
@@ -614,7 +723,7 @@ class General(commands.Cog):
         # GitHub 開源資訊
         embed.add_field(
             name="\u200b",
-            value="本機器人在 Github 上開源，[Github](https://github.com/wei530601/curl) 可點擊",
+            value="本機器人在 Github 上開源，[Github](https://github.com/catrix-dev/curl) 可點擊",
             inline=False
         )
         
@@ -657,6 +766,59 @@ class General(commands.Cog):
         
         view = HelpView()
         await interaction.response.send_message(embed=embed, view=view)
+
+    # ---------------- 頂層常用指令捷徑 (/help, /ping, /botinfo) ----------------
+
+    @app_commands.command(name="help", description="顯示所有可用指令幫助手冊")
+    async def top_help(self, interaction: discord.Interaction):
+        """頂層斜線指令：/help"""
+        await self.help.callback(self, interaction)
+
+    @app_commands.command(name="幫助", description="顯示所有可用指令幫助手冊")
+    async def top_help_zh(self, interaction: discord.Interaction):
+        """頂層斜線指令：/幫助"""
+        await self.help.callback(self, interaction)
+
+    @app_commands.command(name="ping", description="檢查機器人當前延遲")
+    async def top_ping(self, interaction: discord.Interaction):
+        """頂層斜線指令：/ping"""
+        await self.ping.callback(self, interaction)
+
+    @app_commands.command(name="botinfo", description="查看機器人系統狀態與資訊")
+    async def top_botinfo(self, interaction: discord.Interaction):
+        """頂層斜線指令：/botinfo"""
+        await self.botinfo.callback(self, interaction)
+
+    # ---------------- 前綴指令 (!help, !ping) ----------------
+
+    @commands.command(name="help", aliases=["幫助"])
+    async def prefix_help(self, ctx: commands.Context):
+        """前綴指令 !help"""
+        embed = discord.Embed(
+            title="📚 指令幫助",
+            description=(
+                "歡迎使用機器人幫助系統！\n\n"
+                "使用下方選單選擇要查看的指令分類\n"
+                "建議使用斜線指令 `/help` 獲得最佳體驗！\n\n"
+                "**可用分類：**\n"
+                "📌 一般指令 • 🛡️ 管理指令 • 🎮 娛樂指令\n"
+                "🏰 伺服器指令 • 🔧 工具指令 • ⭐ 等級系統\n"
+                "👋 歡迎系統 • 👆 反應角色 • 📅 簽到系統\n"
+                "🎂 生日系統 • 🎯 遊戲系統 • 📊 統計分析\n"
+                "📝 自定義命令 • 🎤 臨時語音 • 📋 個人資料"
+            ),
+            color=discord.Color.from_rgb(37, 99, 235),
+            timestamp=discord.utils.utcnow()
+        )
+        embed.set_footer(text="輸入 /help 查看完整互動功能")
+        view = HelpView()
+        await ctx.send(embed=embed, view=view)
+
+    @commands.command(name="ping", aliases=["延遲"])
+    async def prefix_ping(self, ctx: commands.Context):
+        """前綴指令 !ping"""
+        latency = round(self.bot.latency * 1000)
+        await ctx.send(f'🏓 Pong! 延遲: {latency}ms')
     
     @commands.Cog.listener()
     async def on_ready(self):

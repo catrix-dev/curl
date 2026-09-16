@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>開發者面板 - Discord 機器人</title>
+    <title>開發者面板 - curl 控制台</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <style>
         * {
             margin: 0;
@@ -33,7 +36,14 @@
             color: #2563eb;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+        }
+
+        .navbar-brand img {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            object-fit: cover;
         }
 
         .dev-badge {
@@ -495,10 +505,11 @@
 </head>
 <body>
     <nav class="navbar">
-        <div class="navbar-brand">
-            <span>🛠️ 開發者面板</span>
+        <a href="/dev-panel" class="navbar-brand" style="text-decoration: none;">
+            <img src="/icon.png" alt="curl">
+            <span>curl 開發者面板</span>
             <span class="dev-badge">開發者</span>
-        </div>
+        </a>
         <div class="navbar-user">
             <a href="/select-server" class="back-btn">← 返回控制台</a>
             <img src="{AVATAR_URL}" alt="Avatar" class="user-avatar">
@@ -545,6 +556,16 @@
     </div>
 
     <script>
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         let allGuilds = [];
 
         async function loadGuilds() {
@@ -581,7 +602,7 @@
                 document.getElementById('guildsContainer').innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">⚠️</div>
-                        <p>加载失败: ${error.message}</p>
+                        <p>加载失败: ${escapeHtml(error.message)}</p>
                         <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">请检查浏览器控制台查看详细错误</p>
                     </div>
                 `;
@@ -620,19 +641,21 @@
         }
 
         function createGuildCard(guild) {
+            const safeName = escapeHtml(guild.name);
+            const safeId = escapeHtml(guild.id);
             const iconHtml = guild.icon 
-                ? `<img src="${guild.icon}" alt="${guild.name}">` 
-                : guild.name.charAt(0).toUpperCase();
+                ? `<img src="${encodeURI(guild.icon)}" alt="${safeName}">` 
+                : escapeHtml((guild.name || '').charAt(0).toUpperCase());
 
-                const createdDate = new Date(guild.created_at).toLocaleDateString('zh-TW');
+            const createdDate = new Date(guild.created_at).toLocaleDateString('zh-TW');
 
             return `
-                <div class="guild-card" data-guild-id="${guild.id}">
+                <div class="guild-card" data-guild-id="${safeId}">
                     <div class="guild-header">
                         <div class="guild-icon">${iconHtml}</div>
                         <div class="guild-info">
-                            <div class="guild-name">${guild.name}</div>
-                            <div class="guild-id">ID: ${guild.id}</div>
+                            <div class="guild-name">${safeName}</div>
+                            <div class="guild-id">ID: ${safeId}</div>
                         </div>
                     </div>
                     <div class="guild-stats">
@@ -852,15 +875,19 @@
             const detailsDiv = document.getElementById(`details-${guildId}`);
 
             const memberItems = data.members.map(member => {
-                const statusClass = member.status.toLowerCase();
-                const rolesText = member.roles.length > 0 ? member.roles.join(', ') : '无身份组';
+                const statusClass = escapeHtml(member.status ? member.status.toLowerCase() : 'offline');
+                const safeRoles = (member.roles && member.roles.length > 0) ? escapeHtml(member.roles.join(', ')) : '无身份组';
+                const safeName = escapeHtml(member.name || '');
+                const safeDisplayName = escapeHtml(member.display_name || member.name || '');
+                const safeId = escapeHtml(member.id || '');
+                const safeAvatar = member.avatar ? encodeURI(member.avatar) : 'https://cdn.discordapp.com/embed/avatars/0.png';
 
                 return `
                     <div class="member-item">
-                        <img src="${member.avatar}" alt="${member.name}" class="member-avatar">
+                        <img src="${safeAvatar}" alt="${safeName}" class="member-avatar">
                         <div class="member-info">
-                            <div class="member-name">${member.display_name}${member.bot ? ' 🤖' : ''}</div>
-                            <div class="member-id">${member.id} • ${rolesText}</div>
+                            <div class="member-name">${safeDisplayName}${member.bot ? ' 🤖' : ''}</div>
+                            <div class="member-id">${safeId} • ${safeRoles}</div>
                         </div>
                         <div class="member-status ${statusClass}"></div>
                     </div>

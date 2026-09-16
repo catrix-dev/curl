@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>選擇伺服器 - Discord Bot</title>
+    <title>選擇伺服器 - curl 控制台</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <style>
         * {
             margin: 0;
@@ -31,6 +34,17 @@
             font-size: 1.2rem;
             font-weight: 600;
             color: #2563eb;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+        }
+
+        .navbar-brand img {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            object-fit: cover;
         }
 
         .navbar-user {
@@ -297,7 +311,10 @@
 </head>
 <body>
     <div class="navbar">
-        <div class="navbar-brand">Discord 機器人控制台</div>
+        <a href="/select-server" class="navbar-brand">
+            <img src="/icon.png" alt="curl">
+            <span>curl 控制台</span>
+        </a>
         <div class="navbar-user">
             <img src="{AVATAR_URL}" alt="Avatar" class="user-avatar">
             <span class="user-name">{USERNAME}</span>
@@ -329,6 +346,16 @@
     </div>
 
     <script>
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         async function loadGuilds() {
             try {
                 const response = await fetch('/api/guilds');
@@ -352,18 +379,20 @@
                 guilds.forEach(guild => {
                     const card = document.createElement('a');
                     card.className = 'guild-card';
-                    card.href = `/dashboard/${guild.id}`;
+                    card.href = `/dashboard/${encodeURIComponent(guild.id)}`;
                     
-                    const icon = guild.icon 
-                        ? `<img src="${guild.icon}" alt="${guild.name}">`
-                        : guild.name.charAt(0).toUpperCase();
+                    const safeName = escapeHtml(guild.name);
+                    const safeCount = Number(guild.member_count || 0).toLocaleString();
+                    const iconHtml = guild.icon 
+                        ? `<img src="${encodeURI(guild.icon)}" alt="${safeName}">`
+                        : escapeHtml((guild.name || '').charAt(0).toUpperCase());
                     
                     card.innerHTML = `
                         <div class="guild-header">
-                            <div class="guild-icon">${icon}</div>
+                            <div class="guild-icon">${iconHtml}</div>
                             <div class="guild-info">
-                                <div class="guild-name">${guild.name}</div>
-                                <div class="guild-members">${guild.member_count.toLocaleString()} 位成員</div>
+                                <div class="guild-name">${safeName}</div>
+                                <div class="guild-members">${safeCount} 位成員</div>
                             </div>
                         </div>
                         <span class="guild-badge">有管理權限</span>

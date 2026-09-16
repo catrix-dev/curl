@@ -71,7 +71,7 @@ class Feedback(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
-        self.storage = bot.storage
+        self.data_file = './data/feedback.json'
         self._ensure_data_file()
         
         # 載入開發者 ID
@@ -81,23 +81,23 @@ class Feedback(commands.Cog):
     
     def _ensure_data_file(self):
         """確保數據文件存在"""
-        self.storage.load_global_data(
-            'feedback',
-            default={'feedbacks': [], 'counter': 0},
-            legacy_filename='feedback.json'
-        )
+        os.makedirs('./data', exist_ok=True)
+        if not os.path.exists(self.data_file):
+            with open(self.data_file, 'w', encoding='utf-8') as f:
+                json.dump({'feedbacks': [], 'counter': 0}, f, ensure_ascii=False, indent=4)
     
     def load_data(self):
         """載入反饋數據"""
-        return self.storage.load_global_data(
-            'feedback',
-            default={'feedbacks': [], 'counter': 0},
-            legacy_filename='feedback.json'
-        )
+        try:
+            with open(self.data_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {'feedbacks': [], 'counter': 0}
     
     def save_data(self, data):
         """保存反饋數據"""
-        self.storage.save_global_data('feedback', data)
+        with open(self.data_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
     
     def generate_feedback_id(self):
         """生成反饋 ID"""

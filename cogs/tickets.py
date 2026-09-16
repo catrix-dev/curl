@@ -303,6 +303,14 @@ class Tickets(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def panel(self, interaction: discord.Interaction, 頻道: discord.TextChannel = None):
         """創建客服單面板"""
+        # 檢查用戶是否有管理員權限
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "❌ 只有伺服器管理員才能創建客服單面板！",
+                ephemeral=True
+            )
+            return
+        
         guild_id = str(interaction.guild.id)
         data = self.tickets.get(guild_id, self.load_data(guild_id))
         

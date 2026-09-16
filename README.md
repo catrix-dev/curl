@@ -24,7 +24,6 @@
 - ✅ 自定義命令系統
 - ✅ 自動日誌記錄系統
 - ✅ 實用工具集合
-- ✅ 匿名發言系統（管理員可查看資訊）
 - ✅ 終端命令控制
 
 ## 指令列表
@@ -144,16 +143,7 @@
 - **使用方式**: 用 `!命令名稱` 觸發
 - **網頁管理**: 可在網頁控制台管理
 
-### � 匿名發言 (`/匿名`)
-- `/匿名 發言` - 發送匿名訊息
-- `/匿名 設定頻道` - 設定允許匿名發言的頻道（管理員）
-- `/匿名 移除頻道` - 移除匿名發言頻道（管理員）
-- `/匿名 允許全部` - 允許所有頻道使用匿名發言（管理員）
-- `/匿名 列表` - 查看匿名發言設定（管理員）
-- **資訊按鈕**: 管理員可點擊「貼文資訊」查看原始發送者
-- **隐私保護**: 一般用戶無法查看發送者身份
-
-### �🔧 工具指令 (`/工具`)
+### 🔧 工具指令 (`/工具`)
 - `/工具 頭像` - 查看用戶頭像
 - `/工具 計算器` - 計算數學表達式
 - `/工具 倒數計時` - 創建倒數計時
@@ -312,8 +302,6 @@ async def setup(bot):
 ├── .env.example            # 環境變數示例
 ├── requirements.txt        # Python 依賴
 ├── README.md               # 說明文檔
-├── OAUTH_SETUP.md          # OAuth2 設定教學
-├── LICENSE                 # 授權文件
 ├── .gitignore              # Git 忽略檔案
 ├── data/                   # 數據目錄（自動生成）
 │   └── [guild_id]/         # 各伺服器數據
@@ -327,23 +315,18 @@ async def setup(bot):
 │       ├── achievements.json     # 成就數據
 │       ├── reaction_roles.json   # 反應角色
 │       ├── profiles.json         # 個人資料
-│       ├── statistics.json       # 統計數據
-│       ├── tickets.json          # 客服單數據
-│       └── ticket/               # 客服單聊天記錄（HTML）
+│       └── statistics.json       # 統計數據
 ├── web/                    # 網頁控制台
-│   ├── server.py           # Web 伺服器（OAuth2 + API）
+│   ├── server.py           # Web 伺服器
 │   ├── index.html          # 登入頁面
 │   ├── select_server.html  # 伺服器選擇
-│   ├── dashboard.html      # 控制台主頁
-│   ├── my-tickets.html     # 我的客服單頁面
-│   └── static/             # 靜態資源（CSS、JS、圖片）
-└── cogs/                   # Cogs 資料夾（功能模組）
-    ├── general.py          # 一般指令（ping、userinfo、help）
-    ├── moderation.py       # 管理指令（kick、ban、warn、清除訊息）
-    ├── fun.py              # 娛樂指令（骰子、硬幣、魔法8球）
-    ├── games.py            # 遊戲系統（21點、猜拳、猜數字）
+│   └── dashboard.html      # 控制台主頁
+└── cogs/                   # Cogs 資料夾
+    ├── general.py          # 一般指令
+    ├── moderation.py       # 管理指令（含警告系統）
+    ├── fun.py              # 娛樂指令
     ├── serverinfo.py       # 伺服器資訊統計
-    ├── utilities.py        # 實用工具集合（頭像、計算器、提醒）
+    ├── utilities.py        # 實用工具集合
     ├── leveling.py         # 等級系統
     ├── daily.py            # 簽到系統
     ├── birthday.py         # 生日系統
@@ -351,14 +334,9 @@ async def setup(bot):
     ├── temp_voice.py       # 臨時語音頻道
     ├── custom_commands.py  # 自定義命令
     ├── profile.py          # 個人資料卡片
-    ├── achievements.py     # 成就系統（150+ 成就）
+    ├── achievements.py     # 成就系統
     ├── reaction_roles.py   # 反應角色
-    ├── statistics.py       # 統計分析（活躍度、熱門頻道）
-    ├── tickets.py          # 客服單系統（HTML 聊天記錄）
-    ├── polls.py            # 投票/問卷系統（按鈕式 UI）
-    ├── updater.py          # 自動更新系統
-    ├── developer.py        # 開發者專用指令
-    ├── anonymous.py        # 匿名發言系統
+    ├── statistics.py       # 統計分析
     └── logging_system.py   # 日誌系統
 ```
 

@@ -45,3 +45,13 @@ Thumbs.db
 
 # 脚本工具
 git_upload.bat
+
+# 本地临时与参考文件
+curl.zip
+*.zip
+Downloads/
+catbot_ref/
+scratch/
+.wrangler/
+images
+

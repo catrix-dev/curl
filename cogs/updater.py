@@ -1,10 +1,12 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import aiohttp
 import asyncio
 import os
 import sys
 import hashlib
+import re
 from datetime import datetime
 
 class Updater(commands.Cog):
@@ -12,7 +14,7 @@ class Updater(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
-        self.github_repo = "wei530601/curl"
+        self.github_repo = "catrix-dev/curl"
         self.branch = "main"
         self.version_url = f"https://raw.githubusercontent.com/{self.github_repo}/refs/heads/{self.branch}/version.txt"
         self.update_checked = False
@@ -148,6 +150,14 @@ class Updater(commands.Cog):
             print(f"      ❌ 下載 {filepath} 時出錯: {e}")
             return False
     
+    @staticmethod
+    def parse_version_tuple(v: str):
+        """解析版本號為可比較的整數元組，例如 '2.4.3' -> (2, 4, 3)"""
+        try:
+            return tuple(map(int, re.findall(r'\d+', str(v))))
+        except Exception:
+            return (0,)
+
     async def check_and_update(self):
         """檢查並執行更新"""
         print("\n🔍 檢查更新...")
@@ -167,7 +177,7 @@ class Updater(commands.Cog):
         
         print(f"   🌐 遠程版本: {remote_version}")
         
-        if local_version == remote_version:
+        if self.parse_version_tuple(remote_version) <= self.parse_version_tuple(local_version):
             print("   ✅ 當前版本已是最新！")
             print("─" * 62)
             return
@@ -229,8 +239,26 @@ class Updater(commands.Cog):
     @commands.command(name='checkupdate', aliases=['更新檢查', 'update'])
     @commands.has_permissions(administrator=True)
     async def check_update_command(self, ctx):
-        """手動檢查更新（僅管理員）"""
+        """手動檢查更新（僅管理員，前綴指令）"""
         await ctx.send("🔍 正在檢查更新，請查看控制台輸出...")
+        await self.check_and_update()
+
+    @app_commands.command(name='更新檢查', description='手動檢查機器人是否有新版本更新（僅管理員）')
+    @app_commands.checks.has_permissions(administrator=True)
+    async def slash_check_update(self, interaction: discord.Interaction):
+        """手動檢查更新斜線指令"""
+        await interaction.response.defer(ephemeral=True)
+        local_v = self.get_local_version()
+        remote_v = await self.get_remote_version()
+        if not local_v or not remote_v:
+            await interaction.followup.send(f"❌ 讀取版本資訊失敗 (本地: `{local_v}`, 遠程: `{remote_v}`)", ephemeral=True)
+            return
+
+        if self.parse_version_tuple(remote_v) <= self.parse_version_tuple(local_v):
+            await interaction.followup.send(f"✅ 機器人目前已是最新版本！當前版本：`{local_v}`", ephemeral=True)
+            return
+
+        await interaction.followup.send(f"🎉 發現新版本：`{local_v}` → `{remote_v}`，正在背景下載更新並自動重啟...", ephemeral=True)
         await self.check_and_update()
 
 async def setup(bot):

@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import json
 import os
+import re
 from datetime import datetime
 
 class Moderation(commands.Cog):
@@ -92,6 +93,54 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(embed=embed)
         except discord.Forbidden:
             await interaction.response.send_message("❌ 我沒有權限封鎖此用戶", ephemeral=True)
+
+    @mod_group.command(name="解封用戶", description="解除伺服器成員封鎖 (輸入用戶 ID)")
+    @app_commands.describe(用戶="欲解封的用戶 ID 或提及", 理由="解封理由（可選）")
+    async def unban(self, interaction: discord.Interaction, 用戶: str, 理由: str = "無理由"):
+        """解除伺服器成員封鎖"""
+        await interaction.response.defer(ephemeral=False)
+        is_dev = str(interaction.user.id) in [d.strip() for d in os.getenv("DEV_ID", "").split(",") if d.strip()]
+        is_owner = (interaction.guild and interaction.user.id == interaction.guild.owner_id)
+        has_perm = (
+            is_dev or is_owner or
+            getattr(interaction.user.guild_permissions, "ban_members", False) or
+            getattr(interaction.user.guild_permissions, "administrator", False)
+        )
+        if not has_perm:
+            await interaction.followup.send("❌ 您沒有解封成員的權限！", ephemeral=True)
+            return
+
+        clean_id = re.sub(r"[<@!>]", "", 用戶).strip()
+        matched = re.findall(r"\b\d{17,20}\b", 用戶)
+        if matched:
+            clean_id = matched[0]
+
+        if not clean_id.isdigit():
+            await interaction.followup.send(f"❌ 請輸入正確的用戶 ID（數字）：`{用戶}`", ephemeral=True)
+            return
+
+        try:
+            user = await self.bot.fetch_user(int(clean_id))
+            await interaction.guild.unban(user, reason=理由)
+            embed = discord.Embed(
+                title="🔓 成員已解封",
+                description=f"{user.mention} (`{user.id}`) 已被解除伺服器封鎖",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="理由", value=理由)
+            embed.set_footer(text=f"操作者: {interaction.user}")
+            await interaction.followup.send(embed=embed)
+        except discord.NotFound:
+            await interaction.followup.send(f"ℹ️ 該用戶 `{clean_id}` 未在伺服器的封鎖名單中，或找不到該用戶。", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send("❌ 機器人缺少解封權限（需要「封鎖成員」權限）！", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ 解封時發生錯誤：`{e}`", ephemeral=True)
+
+    @mod_group.command(name="解封", description="[捷徑] 解除伺服器成員封鎖 (輸入用戶 ID)")
+    @app_commands.describe(用戶="欲解封的用戶 ID 或提及", 理由="解封理由（可選）")
+    async def unban_shortcut(self, interaction: discord.Interaction, 用戶: str, 理由: str = "無理由"):
+        await self.unban.callback(self, interaction, 用戶, 理由)
     
     @mod_group.command(name="清除訊息", description="清除訊息")
     @app_commands.checks.has_permissions(manage_messages=True)

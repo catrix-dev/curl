@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discord 機器人控制台</title>
+    <title>curl 機器人控制台</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <style>
         * {
             margin: 0;
@@ -219,9 +222,12 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>Discord 機器人控制台</h1>
-            <div class="subtitle">機器人管理面板</div>
+        <div class="header" style="display: flex; align-items: center; gap: 1.25rem;">
+            <img src="/icon.png" alt="curl Logo" style="width: 52px; height: 52px; border-radius: 12px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.3); flex-shrink: 0;">
+            <div>
+                <h1>curl 機器人控制台</h1>
+                <div class="subtitle">Discord 多功能管理後台</div>
+            </div>
         </div>
 
         <div class="status-bar">
@@ -230,7 +236,7 @@
                 <span class="status-text">系統運行中</span>
             </div>
             <div class="status-item">
-                <span class="status-text">版本 6.0.0</span>
+                <span class="status-text">版本 7.0.0</span>
             </div>
         </div>
 
@@ -274,7 +280,11 @@
         </div>
 
         <div class="footer">
-            © 2026 Discord 機器人控制台 · 版權所有
+            <div style="display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                <a href="/privacy" style="color: #2563eb; text-decoration: none;">隱私權政策</a>
+                <a href="https://discord.com/oauth2/authorize?client_id=1470688452784820327&permissions=8&scope=bot%20applications.commands" target="_blank" style="color: #2563eb; text-decoration: none;">邀請機器人</a>
+            </div>
+            © 2026 curl 機器人控制台 · 版權所有
         </div>
     </div>
 </body>
