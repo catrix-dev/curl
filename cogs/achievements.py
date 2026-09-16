@@ -172,11 +172,28 @@ class Achievements(commands.Cog):
         return os.path.join(folder, 'achievements.json')
     
     def load_achievements(self, guild_id: int) -> dict:
-        """載入成就數據"""
+        """載入成就數據（具備 list 結構向相容 dict 結構平滑遷移能力）"""
         file_path = self.get_achievement_file(guild_id)
         if os.path.exists(file_path):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    needs_save = False
+                    for u_k, u_v in list(data.items()):
+                        if isinstance(u_v, list):
+                            data[u_k] = {
+                                'unlocked': list(u_v),
+                                'progress': {}
+                            }
+                            for a_id in u_v:
+                                data[u_k][a_id] = {'unlocked_at': datetime.utcnow().isoformat()}
+                            needs_save = True
+                    if needs_save:
+                        self.save_achievements(guild_id, data)
+                    return data
+            except Exception:
+                pass
         return {}
     
     def save_achievements(self, guild_id: int, achievements: dict):
@@ -228,7 +245,7 @@ class Achievements(commands.Cog):
                 game_data = json.load(f)
                 user_key = str(user_id)
                 if user_key in game_data:
-                    stats['game_wins'] = game_data[user_key].get('wins', 0)
+                    stats['game_wins'] = game_data[user_key].get('total_wins', game_data[user_key].get('wins', 0))
         
         # 簽到數據
         daily_file = os.path.join(self.data_folder, str(guild_id), 'daily.json')
@@ -324,7 +341,8 @@ class Achievements(commands.Cog):
         for achievement_id in unlocked[:20]:  # 限制顯示 20 個
             if achievement_id in self.achievement_definitions:
                 achievement = self.achievement_definitions[achievement_id]
-                unlocked_at = user_achievements[user_key].get(achievement_id, {}).get('unlocked_at')
+                user_obj = user_achievements.get(user_key, {})
+                unlocked_at = user_obj.get(achievement_id, {}).get('unlocked_at') if isinstance(user_obj, dict) else None
                 
                 if unlocked_at:
                     try:
@@ -344,16 +362,23 @@ class Achievements(commands.Cog):
                 value="\n\n".join(achievement_list),
                 inline=False
             )
+        else:
+            embed.add_field(
+                name="已解鎖成就",
+                value="尚未解鎖任何成就",
+                inline=False
+            )
         
         embed.set_footer(text=f"用戶：{interaction.user.name}")
         
         await interaction.response.send_message(embed=embed)
     
-    @achievement_group.command(name="進度", description="查看成就進度")
-    async def achievement_progress(self, interaction: discord.Interaction):
+    @achievement_group.command(name="進度", description="查看自己的成就進度")
+    async def view_progress(self, interaction: discord.Interaction):
         """查看成就進度"""
         guild_id = interaction.guild.id
         user_id = interaction.user.id
+        user_key = str(user_id)
         
         # 獲取統計數據
         stats = {
@@ -368,7 +393,6 @@ class Achievements(commands.Cog):
         if os.path.exists(levels_file):
             with open(levels_file, 'r', encoding='utf-8') as f:
                 levels_data = json.load(f)
-                user_key = str(user_id)
                 if user_key in levels_data:
                     stats['level'] = levels_data[user_key].get('level', 0)
                     stats['messages'] = levels_data[user_key].get('messages', 0)
@@ -378,9 +402,8 @@ class Achievements(commands.Cog):
         if os.path.exists(game_file):
             with open(game_file, 'r', encoding='utf-8') as f:
                 game_data = json.load(f)
-                user_key = str(user_id)
                 if user_key in game_data:
-                    stats['game_wins'] = game_data[user_key].get('wins', 0)
+                    stats['game_wins'] = game_data[user_key].get('total_wins', game_data[user_key].get('wins', 0))
         
         # 簽到數據
         daily_file = os.path.join(self.data_folder, str(guild_id), 'daily.json')

@@ -37,12 +37,32 @@ class Welcome(commands.Cog):
     def save_settings(self, guild_id: str):
         """保存伺服器設定"""
         data_file = self.get_data_file(guild_id)
-        with open(data_file, 'w', encoding='utf-8') as f:
-            json.dump(self.settings.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+        tmp_file = data_file + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(self.settings.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, data_file)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
+    
+    @staticmethod
+    def _safe_format(template: str, **kwargs) -> str:
+        """安全格式化字符串，忽略未定義的佔位符或格式錯誤"""
+        try:
+            res = template
+            for k, v in kwargs.items():
+                res = res.replace(f"{{{k}}}", str(v))
+            return res
+        except Exception:
+            return template
     
     def get_settings(self, guild_id: str):
         """獲取伺服器設定（每次都重新載入以確保同步網頁修改）"""
-        # 每次都重新讀取檔案，確保與網頁修改同步
         self.settings[guild_id] = self.load_settings(guild_id)
         return self.settings[guild_id]
     
@@ -192,9 +212,12 @@ class Welcome(commands.Cog):
         if not channel:
             return
         
-        message = settings["welcome_message"].format(
+        message = self._safe_format(
+            settings.get("welcome_message", "歡迎 {user} 加入 {server}！"),
             user=member.mention,
-            server=member.guild.name
+            server=member.guild.name,
+            count=member.guild.member_count,
+            member_count=member.guild.member_count
         )
         
         embed = discord.Embed(
@@ -218,16 +241,19 @@ class Welcome(commands.Cog):
         # 每次都從檔案重新讀取，確保同步網頁修改
         settings = self.load_settings(guild_id)
         
-        if not settings["leave_enabled"] or not settings["leave_channel"]:
+        if not settings.get("leave_enabled") or not settings.get("leave_channel"):
             return
         
         channel = member.guild.get_channel(settings["leave_channel"])
         if not channel:
             return
         
-        message = settings["leave_message"].format(
+        message = self._safe_format(
+            settings.get("leave_message", "{user} 離開了 {server}..."),
             user=member.name,
-            server=member.guild.name
+            server=member.guild.name,
+            count=member.guild.member_count,
+            member_count=member.guild.member_count
         )
         
         embed = discord.Embed(

@@ -40,13 +40,23 @@ class Utilities(commands.Cog):
     async def calculator(self, interaction: discord.Interaction, expression: str):
         """計算数学表達式"""
         try:
+            if len(expression) > 60:
+                await interaction.response.send_message("❌ 表達式長度不能超過 60 個字符", ephemeral=True)
+                return
+            # 拒絕指數運算 ** 防止超大數計算 DoS
+            if '**' in expression:
+                await interaction.response.send_message("❌ 為防止運算超載，不支援指數 (**) 運算！", ephemeral=True)
+                return
             # 只允許安全的字符
             if not re.match(r'^[0-9+\-*/().\s]+$', expression):
-                await interaction.response.send_message("❌ 表達式包含非法字符！只允許數字和運算符", ephemeral=True)
+                await interaction.response.send_message("❌ 表達式包含非法字符！只允許數字和基本運算符 (+, -, *, /, ())", ephemeral=True)
                 return
             
-            # 計算結果
-            result = eval(expression)
+            # 安全計算結果
+            result = eval(expression, {"__builtins__": None}, {})
+            if isinstance(result, float) and (result != result or abs(result) == float('inf')):
+                await interaction.response.send_message("❌ 計算結果溢出或無效", ephemeral=True)
+                return
             
             embed = discord.Embed(
                 title="🧮 計算器",
@@ -57,6 +67,8 @@ class Utilities(commands.Cog):
             
             await interaction.response.send_message(embed=embed)
             
+        except ZeroDivisionError:
+            await interaction.response.send_message("❌ 除數不能為 0！", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ 計算錯誤: {str(e)}", ephemeral=True)
     

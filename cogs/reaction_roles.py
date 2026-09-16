@@ -30,8 +30,18 @@ class ReactionRoles(commands.Cog):
     def save_data(self, guild_id: str):
         """保存反應角色數據"""
         data_file = self.get_data_file(guild_id)
-        with open(data_file, 'w', encoding='utf-8') as f:
-            json.dump(self.reaction_roles.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+        tmp_file = data_file + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(self.reaction_roles.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, data_file)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     def get_reaction_roles(self, guild_id: str):
         """獲取反應角色數據"""
@@ -86,23 +96,32 @@ class ReactionRoles(commands.Cog):
         role: discord.Role
     ):
         """添加反應角色"""
+        await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild.id)
         data = self.get_reaction_roles(guild_id)
         
         # 嘗試獲取訊息並添加反應
         try:
-            # 在所有文字頻道中搜索訊息
             message = None
-            for channel in interaction.guild.text_channels:
-                try:
-                    message = await channel.fetch_message(int(message_id))
-                    if message:
-                        break
-                except:
-                    continue
+            if message_id in data and "channel_id" in data[message_id]:
+                known_channel = interaction.guild.get_channel(data[message_id]["channel_id"])
+                if known_channel:
+                    try:
+                        message = await known_channel.fetch_message(int(message_id))
+                    except Exception:
+                        pass
             
             if not message:
-                await interaction.response.send_message("❌ 找不到指定的訊息", ephemeral=True)
+                for channel in interaction.guild.text_channels:
+                    try:
+                        message = await channel.fetch_message(int(message_id))
+                        if message:
+                            break
+                    except Exception:
+                        continue
+            
+            if not message:
+                await interaction.followup.send("❌ 找不到指定的訊息", ephemeral=True)
                 return
             
             # 添加反應
@@ -118,15 +137,15 @@ class ReactionRoles(commands.Cog):
             data[message_id]["roles"][emoji] = role.id
             self.save_data(guild_id)
             
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"✅ 已添加反應角色：{emoji} → {role.mention}",
                 ephemeral=True
             )
         
         except discord.HTTPException:
-            await interaction.response.send_message("❌ 無法添加表情符號，請確保表情符號有效", ephemeral=True)
+            await interaction.followup.send("❌ 無法添加表情符號，請確保表情符號有效且機器人有權限", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ 發生錯誤：{str(e)}", ephemeral=True)
+            await interaction.followup.send(f"❌ 發生錯誤：{str(e)}", ephemeral=True)
     
     @rr_group.command(name="移除", description="移除反應角色")
     @app_commands.checks.has_permissions(administrator=True)

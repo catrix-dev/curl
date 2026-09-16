@@ -29,8 +29,18 @@ class CustomCommands(commands.Cog):
     def save_commands(self, guild_id: int, commands: dict):
         """儲存自定義命令"""
         file_path = self.get_commands_file(guild_id)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(commands, f, ensure_ascii=False, indent=2)
+        tmp_file = file_path + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(commands, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_file, file_path)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     custom_group = app_commands.Group(name="自定義", description="自定義命令管理")
     
@@ -202,7 +212,10 @@ class CustomCommands(commands.Cog):
             return
         
         # 提取命令名稱
-        command_name = message.content[1:].split()[0]
+        parts = message.content[1:].strip().split()
+        if not parts:
+            return
+        command_name = parts[0]
         
         # 載入自定義命令
         commands = self.load_commands(message.guild.id)

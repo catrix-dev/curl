@@ -58,39 +58,66 @@ class Games(commands.Cog):
             json.dump(data, f, ensure_ascii=False, indent=2)
     
     def add_rewards(self, guild_id: int, user_id: int, won: bool):
-        """添加獎勵（經驗值和積分）"""
-        # 添加簽到積分
+        """添加獎勵（經驗值和積分，同步記憶體與磁碟並觸發成就檢查）"""
+        # 1. 添加簽到積分（透過 Daily Cog 記憶體更新）
         try:
-            daily_file = os.path.join('data', str(guild_id), 'daily.json')
-            if os.path.exists(daily_file):
-                with open(daily_file, 'r', encoding='utf-8') as f:
-                    daily_data = json.load(f)
-                
-                user_id_str = str(user_id)
-                if user_id_str in daily_data:
-                    points = 5 if won else 1  # 贏了+5，輸了+1
-                    daily_data[user_id_str]['total_points'] = daily_data[user_id_str].get('total_points', 0) + points
-                    
-                    with open(daily_file, 'w', encoding='utf-8') as f:
-                        json.dump(daily_data, f, ensure_ascii=False, indent=2)
-        except:
+            daily_cog = self.bot.get_cog('Daily')
+            if daily_cog:
+                g_str = str(guild_id)
+                u_str = str(user_id)
+                if hasattr(daily_cog, 'daily_data'):
+                    if g_str not in daily_cog.daily_data:
+                        daily_cog.daily_data[g_str] = daily_cog.load_data(g_str)
+                    if u_str in daily_cog.daily_data[g_str]:
+                        pts = 5 if won else 1
+                        daily_cog.daily_data[g_str][u_str]['total_points'] = daily_cog.daily_data[g_str][u_str].get('total_points', 0) + pts
+                        daily_cog.save_data(g_str)
+            else:
+                daily_file = os.path.join('data', str(guild_id), 'daily.json')
+                if os.path.exists(daily_file):
+                    with open(daily_file, 'r', encoding='utf-8') as f:
+                        daily_data = json.load(f)
+                    user_id_str = str(user_id)
+                    if user_id_str in daily_data:
+                        points = 5 if won else 1
+                        daily_data[user_id_str]['total_points'] = daily_data[user_id_str].get('total_points', 0) + points
+                        with open(daily_file, 'w', encoding='utf-8') as f:
+                            json.dump(daily_data, f, ensure_ascii=False, indent=2)
+        except Exception:
             pass
         
-        # 添加經驗值
+        # 2. 添加經驗值（透過 Leveling Cog 記憶體更新）
         try:
-            levels_file = os.path.join('data', str(guild_id), 'levels.json')
-            if os.path.exists(levels_file):
-                with open(levels_file, 'r', encoding='utf-8') as f:
-                    levels_data = json.load(f)
-                
-                user_id_str = str(user_id)
-                if user_id_str in levels_data:
-                    xp = 10 if won else 3  # 贏了+10 XP，輸了+3 XP
-                    levels_data[user_id_str]['xp'] = levels_data[user_id_str].get('xp', 0) + xp
-                    
-                    with open(levels_file, 'w', encoding='utf-8') as f:
-                        json.dump(levels_data, f, ensure_ascii=False, indent=2)
-        except:
+            leveling_cog = self.bot.get_cog('Leveling')
+            if leveling_cog:
+                g_str = str(guild_id)
+                u_str = str(user_id)
+                u_data = leveling_cog.get_user_data(g_str, u_str)
+                xp_gain = 10 if won else 3
+                u_data['xp'] = u_data.get('xp', 0) + xp_gain
+                new_lvl = leveling_cog.calculate_level(u_data['xp'])
+                u_data['level'] = new_lvl
+                leveling_cog.save_data(g_str)
+            else:
+                levels_file = os.path.join('data', str(guild_id), 'levels.json')
+                if os.path.exists(levels_file):
+                    with open(levels_file, 'r', encoding='utf-8') as f:
+                        levels_data = json.load(f)
+                    user_id_str = str(user_id)
+                    if user_id_str in levels_data:
+                        xp = 10 if won else 3
+                        levels_data[user_id_str]['xp'] = levels_data[user_id_str].get('xp', 0) + xp
+                        with open(levels_file, 'w', encoding='utf-8') as f:
+                            json.dump(levels_data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+        # 3. 觸發成就檢查
+        try:
+            ach_cog = self.bot.get_cog('Achievements')
+            if ach_cog:
+                asyncio.create_task(ach_cog.check_achievements(guild_id, user_id))
+        except Exception:
             pass
     
     # 創建遊戲指令群組
@@ -451,17 +478,18 @@ class Games(commands.Cog):
     @game.command(name="排行榜", description="查看遊戲勝率排行榜")
     async def game_leaderboard(self, interaction: discord.Interaction):
         """遊戲排行榜"""
+        await interaction.response.defer()
         file_path = os.path.join('data', str(interaction.guild.id), 'game_stats.json')
         
         if not os.path.exists(file_path):
-            await interaction.response.send_message("❌ 還沒有遊戲統計數據", ephemeral=True)
+            await interaction.followup.send("❌ 還沒有遊戲統計數據", ephemeral=True)
             return
         
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         if not data:
-            await interaction.response.send_message("❌ 還沒有人玩過遊戲", ephemeral=True)
+            await interaction.followup.send("❌ 還沒有人玩過遊戲", ephemeral=True)
             return
         
         # 計算勝率並排序（至少玩過5場）
@@ -480,7 +508,7 @@ class Games(commands.Cog):
         leaderboard = leaderboard[:10]  # 只取前10名
         
         if not leaderboard:
-            await interaction.response.send_message("❌ 還沒有達到 5 場遊戲的玩家", ephemeral=True)
+            await interaction.followup.send("❌ 還沒有達到 5 場遊戲的玩家", ephemeral=True)
             return
         
         embed = discord.Embed(
@@ -505,7 +533,7 @@ class Games(commands.Cog):
         
         embed.description += f"\n\n{leaderboard_text}"
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Games(bot))

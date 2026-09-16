@@ -34,10 +34,19 @@ class SecuritySystem(commands.Cog):
         """保存安全設定數據"""
         folder = f"{self.data_folder}/{guild_id}"
         os.makedirs(folder, exist_ok=True)
-        
         filepath = f"{folder}/security.json"
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
+        tmp_file = filepath + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+            os.replace(tmp_file, filepath)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     def check_banned_word(self, content, banned_words, case_sensitive=False, match_type="contains"):
         """檢查是否包含違禁詞"""
@@ -56,10 +65,12 @@ class SecuritySystem(commands.Cog):
                 if check_word in content:
                     return True, word
             elif match_type == "regex":
-                # 正則匹配
+                # 正則匹配防 ReDoS
+                if len(check_word) > 200:
+                    continue
                 try:
                     pattern = re.compile(check_word, re.IGNORECASE if not case_sensitive else 0)
-                    if pattern.search(content):
+                    if pattern.search(content[:1000]):
                         return True, word
                 except re.error:
                     continue
@@ -165,8 +176,15 @@ class SecuritySystem(commands.Cog):
             await interaction.response.send_message("❌ 該違禁詞已存在！", ephemeral=True)
             return
         
-        if "banned_words" not in data:
-            data["banned_words"] = []
+        if data.get("match_type") == "regex":
+            if len(詞彙) > 200:
+                await interaction.response.send_message("❌ 正則表達式長度不能超過 200 字符", ephemeral=True)
+                return
+            try:
+                re.compile(詞彙)
+            except re.error as err:
+                await interaction.response.send_message(f"❌ 無效的正則表達式: {err}", ephemeral=True)
+                return
         
         data["banned_words"].append(詞彙)
         self.save_security_data(interaction.guild_id, data)

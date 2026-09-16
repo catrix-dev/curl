@@ -121,11 +121,11 @@ def convert_math_powers_to_unicode(text: str) -> str:
     if not text or ("^" not in text and "_{" not in text):
         return text
 
-    parts = re.split(r"(```[\s\S]*?```)", text)
+    parts = re.split(r"(```[\s\S]*?```|`[^`\n]+`)", text)
     result = []
 
     for part in parts:
-        if part.startswith("```"):
+        if part.startswith("```") or part.startswith("`"):
             result.append(part)
             continue
 
@@ -169,13 +169,13 @@ def format_ai_reply(text: str) -> str:
     # 自動轉換數學次方為美觀的 Unicode 上標 (例如 p^3 -> p³, x^2 -> x²)
     text = convert_math_powers_to_unicode(text)
 
-    # 擷取並美化所有網頁搜尋引用標記（支援 【36kr.com】(https://...) 與 [domain](https://...)）
-    citation_pattern = r"[【\[]([^】\]]+)[】\]]\((https?://[^\s)]+)\)"
+    # 僅擷取網頁搜尋引用標記（如 【36kr.com】(https://...) 或 [1](https://...)），避免誤刪一般正文 Markdown 連結
+    citation_pattern = r"(?:【([^】]+)】|\[(\d+)\])\((https?://[^\s)]+)\)"
     citations = re.findall(citation_pattern, text)
 
     sources_block = ""
     if citations:
-        # 將文中雜亂的引用連結自內文中移除
+        # 將文中雜亂的搜尋腳註自內文中移除
         text = re.sub(citation_pattern, "", text)
         # 清理移除連結後可能殘留的異常標點與多餘空格
         text = re.sub(r"[ \t]+([，。！？])", r"\1", text)
@@ -185,27 +185,14 @@ def format_ai_reply(text: str) -> str:
         # 去除重複網址並產生典雅的參考來源區塊
         seen_urls = set()
         source_items = []
-        for title, url in citations:
+        for t1, t2, url in citations:
+            clean_title = (t1 or t2 or "").strip()
             if url not in seen_urls:
                 seen_urls.add(url)
-                clean_title = title.strip()
                 source_items.append(f"> - [{clean_title}]({url})")
 
         if source_items:
             sources_block = "\n\n> 🌐 **參考來源**：\n" + "\n".join(source_items[:4])
-
-    # 如果包含程式碼區塊，保留其內部換行，僅壓縮外部過多空行
-    if "```" in text:
-        text = re.sub(r"\n{3,}", "\n\n", text).strip()
-        return (text + sources_block).strip()
-
-    # 判斷是否為條列清單或分點（如 1. 2. 或 - * •）
-    is_list = bool(re.search(r"^\s*(?:[-*•]|\d+[.)])\s", text, re.MULTILINE))
-
-    # 若非清單，檢查是否為短句換行（例如 2~3 行極短句，每行字數少於 50 字且無來源區塊）
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    if not is_list and 1 < len(lines) <= 3 and all(len(l) < 50 for l in lines) and not sources_block:
-        return " ".join(lines)
 
     # 正常段落保留標準雙換行 (\n\n)；僅壓縮 3 個以上連續換行為雙換行
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -217,10 +204,8 @@ class GeminiClient:
     def __init__(self):
         self.api_keys: List[str] = self.load_keys()
         self.current_key_index: int = 0
-        # 優先採用極速低延遲之 gemini-3.5-flash-lite (響應時間約 0.8 秒)
-        self.model: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
-        if self.model == "gemini-2.5-flash-lite":
-            self.model = "gemini-3.5-flash-lite"
+        # 優先採用官方現行極速低延遲之 gemini-2.0-flash
+        self.model: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
         self._session: Optional[aiohttp.ClientSession] = None
 
     async def get_session(self) -> aiohttp.ClientSession:
@@ -348,9 +333,9 @@ class GeminiClient:
                 "parts": [{"text": system_instruction}]
             }
 
-        # 候選模型：優先採用健康高配額低延遲之 gemini-3.5-flash-lite, gemini-3.6-flash 與 gemini-3.5-flash
-        candidate_models = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash"]
-        if self.model and self.model not in candidate_models and not self.model.startswith("gemini-2.5"):
+        # 候選模型：優先採用官方現行高配額低延遲之 gemini-2.0-flash, gemini-1.5-flash 與 gemini-2.0-flash-lite
+        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]
+        if self.model and self.model not in candidate_models:
             candidate_models.insert(0, self.model)
 
         session = await self.get_session()
@@ -406,8 +391,7 @@ class DeepSeekClient:
     def __init__(self):
         self.api_keys: List[str] = self.load_keys()
         self.current_key_index: int = 0
-        self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-        self.vision_model = os.getenv("DEEPSEEK_VISION_MODEL", "deepseek-v4-flash-vision-exp")
+        self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat").strip()
         base = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").strip()
         if not base.endswith("/v1"):
             if base.endswith("/"):
@@ -520,7 +504,7 @@ class DeepSeekClient:
             if has_img:
                 break
 
-        chosen_model = model or (self.vision_model if has_img else self.model)
+        chosen_model = model or self.model
 
         payload = {
             "model": chosen_model,
@@ -551,9 +535,11 @@ class DeepSeekClient:
                         choices = data.get("choices", [])
                         if choices:
                             msg_obj = choices[0].get("message", {})
-                            content = msg_obj.get("content", "").strip()
+                            raw_c = msg_obj.get("content")
+                            content = raw_c.strip() if isinstance(raw_c, str) else ""
                             if not content and msg_obj.get("reasoning_content"):
-                                content = msg_obj.get("reasoning_content", "").strip()
+                                raw_r = msg_obj.get("reasoning_content")
+                                content = raw_r.strip() if isinstance(raw_r, str) else ""
                             if content:
                                 return content
                         raise RuntimeError("DeepSeek 回傳內容為空")
@@ -586,18 +572,18 @@ class OpenRouterClient:
     def __init__(self):
         self.api_keys: List[str] = self.load_keys()
         self.current_key_index: int = 0
-        self.model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash").strip()
+        self.model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001").strip()
 
-        # 讀取純文字模式候選模型（預設首選 Google Gemini 2.5 Flash 極速主力，備援 Gemini 3.7 與 Claude Sonnet 5，OpenRouter 限制 fallback 陣列最多 3 個）
-        default_candidates = ["google/gemini-2.5-flash", "google/gemini-3.7-flash", "anthropic/claude-sonnet-5"]
+        # 讀取純文字模式候選模型（預設首選 Google Gemini 2.0 Flash，備援 Claude 3.5 / 3.7 Sonnet，OpenRouter 限制 fallback 陣列最多 3 個）
+        default_candidates = ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet", "anthropic/claude-3.7-sonnet"]
         env_models = os.getenv("OPENROUTER_MODELS", "")
         if env_models:
             self.candidate_models = [m.strip() for m in env_models.split(",") if m.strip()][:3]
         else:
             self.candidate_models = default_candidates
 
-        # 讀取多模態視覺候選模型（當對話包含圖片時使用：Gemini 2.5 + Gemini 3.7 + Claude Sonnet 5）
-        default_vision = ["google/gemini-2.5-flash", "google/gemini-3.7-flash", "anthropic/claude-sonnet-5"]
+        # 讀取多模態視覺候選模型（當對話包含圖片時使用：Gemini 2.0 + Claude 3.5 Sonnet）
+        default_vision = ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet", "anthropic/claude-3.7-sonnet"]
         env_vision = os.getenv("OPENROUTER_VISION_MODELS", "")
         if env_vision:
             self.vision_models = [m.strip() for m in env_vision.split(",") if m.strip()][:3]
@@ -784,8 +770,8 @@ class OpenRouterClient:
                     last_error = f"HTTP {resp.status}: {error_body[:150]}"
                     print(f"[AI] OpenRouter 請求失敗 ({resp.status}): {error_body[:120]}")
 
-                    # 遇到 429 配額滿/速率限制、401/402/403 憑證錯誤或 5xx 伺服器錯誤時，自動輪替下一把金鑰重試
-                    if resp.status in (429, 401, 402, 403, 500, 502, 503, 504):
+                    # 遇到 400（模型無效/參數不支援）、429 配額滿/速率限制、401/402/403 憑證錯誤或 5xx 伺服器錯誤時，自動輪替金鑰重試
+                    if resp.status in (400, 429, 401, 402, 403, 500, 502, 503, 504):
                         self.rotate_key()
                         attempts += 1
                         continue
@@ -883,9 +869,24 @@ class UnifiedAIClient:
         if not merged_messages:
             merged_messages = [{"role": "user", "content": "你好"}]
 
-        # 4. 上下文總長度保護（保留最新輪次，若過長則修剪最早的對話輪次）
+        # 4. 上下文總長度保護（保留最新輪次，若過長則修剪最早的對話輪次，支援字串與多模態列表）
+        def get_msg_len(msg):
+            c = msg.get("content")
+            if isinstance(c, str):
+                return len(c)
+            if isinstance(c, list):
+                total = 0
+                for part in c:
+                    if isinstance(part, dict):
+                        if part.get("type") == "text":
+                            total += len(part.get("text", ""))
+                        elif part.get("type") == "image_url":
+                            total += len(part.get("image_url", {}).get("url", ""))
+                return total
+            return 0
+
         while len(merged_messages) > 2:
-            total_chars = sum(len(m["content"]) for m in merged_messages if isinstance(m["content"], str))
+            total_chars = sum(get_msg_len(m) for m in merged_messages)
             if total_chars > 24000:
                 merged_messages.pop(0)
                 if merged_messages and merged_messages[0]["role"] != "user":
@@ -939,7 +940,7 @@ class UnifiedAIClient:
             return None
 
         async def run_deepseek() -> Optional[str]:
-            if not self.deepseek.is_configured():
+            if not self.deepseek.is_configured() or contains_image:
                 return None
             openai_messages = self._convert_contents_to_openai(contents)
             target_model = model if active_provider == "deepseek" else None
@@ -950,11 +951,10 @@ class UnifiedAIClient:
 
         # 根據指定的主力 provider 與是否包含圖片決定呼叫與備援優先順序
         if contains_image:
-            # 多模態圖片辨識：優先以 Google Gemini 官方原生引擎為第一主力，極速且辨識度最高
+            # 多模態圖片辨識：DeepSeek 官方 API 不支援圖片，僅由 Gemini 與 OpenRouter 接手
             exec_chain = [
                 ("Gemini", run_gemini),
-                ("OpenRouter", run_openrouter),
-                ("DeepSeek", run_deepseek)
+                ("OpenRouter", run_openrouter)
             ]
         elif active_provider == "gemini":
             exec_chain = [
@@ -1013,17 +1013,23 @@ class UnifiedAIClient:
 
 # 支援之 AI 模型清單定義
 SUPPORTED_AI_MODELS = {
+    "gemini_20_flash": {
+        "provider": "openrouter",
+        "model": "google/gemini-2.0-flash-001",
+        "name": "⚡ Google Gemini 2.0 Flash (毫秒級極速多模態・系統預設推薦)",
+        "badge": "極速推薦"
+    },
     "gemini_25_flash": {
         "provider": "openrouter",
-        "model": "google/gemini-2.5-flash",
-        "name": "⚡ Google Gemini 2.5 Flash (毫秒級極速多模態・系統預設推薦)",
+        "model": "google/gemini-2.0-flash-001",
+        "name": "⚡ Google Gemini 2.0 Flash (毫秒級極速多模態)",
         "badge": "極速推薦"
     },
     "gemini_37_flash": {
         "provider": "openrouter",
-        "model": "google/gemini-3.7-flash",
-        "name": "🌟 Google Gemini 3.7 Flash (次世代深度思考多模態旗艦)",
-        "badge": "深度思考"
+        "model": "google/gemini-2.0-flash-001",
+        "name": "🌟 Google Gemini 2.0 Flash (次世代多模態旗艦)",
+        "badge": "官方旗艦"
     },
     "openrouter_auto": {
         "provider": "openrouter",
@@ -1033,8 +1039,8 @@ SUPPORTED_AI_MODELS = {
     },
     "claude_sonnet": {
         "provider": "openrouter",
-        "model": "anthropic/claude-sonnet-5",
-        "name": "🎭 Anthropic Claude Sonnet 5 (頂級文學邏輯與寫作旗艦)",
+        "model": "anthropic/claude-3.5-sonnet",
+        "name": "🎭 Anthropic Claude 3.5 Sonnet (頂級文學邏輯與寫作旗艦)",
         "badge": "Claude 旗艦"
     },
     "kimi_k25": {
@@ -1063,8 +1069,8 @@ SUPPORTED_AI_MODELS = {
     },
     "grok_420": {
         "provider": "openrouter",
-        "model": "x-ai/grok-4.20",
-        "name": "⚡ xAI Grok 4.20 (馬斯克旗下最新前沿旗艦)",
+        "model": "x-ai/grok-2-1212",
+        "name": "⚡ xAI Grok 2 (馬斯克旗下前沿旗艦)",
         "badge": "xAI 旗艦"
     },
     "deepseek_v3": {
@@ -2203,18 +2209,17 @@ class ImageGenerationEngine:
         self.openrouter = openrouter_client
         self.gemini = gemini_client
         self.ai_client = ai_client
-        raw_model = os.getenv("OPENROUTER_IMAGE_MODEL", "google/gemini-2.5-flash-image").strip()
-        self.image_model = raw_model if "pro" not in raw_model.lower() else "google/gemini-2.5-flash-image"
+        raw_model = os.getenv("OPENROUTER_IMAGE_MODEL", "google/gemini-2.0-flash-001").strip()
+        self.image_model = raw_model
         models_env = os.getenv("OPENROUTER_IMAGE_MODELS", "").strip()
         if models_env:
-            self.image_models = [m.strip() for m in models_env.split(",") if m.strip() and "gemini" in m.lower() and "pro" not in m.lower()]
+            self.image_models = [m.strip() for m in models_env.split(",") if m.strip()]
         else:
             self.image_models = [
-                "google/gemini-2.5-flash-image",
-                "google/gemini-3.1-flash-image",
-                "google/gemini-3.1-flash-lite-image"
+                "google/gemini-2.0-flash-001",
+                "anthropic/claude-3.5-sonnet"
             ]
-        if self.image_model and self.image_model not in self.image_models and "gemini" in self.image_model.lower() and "pro" not in self.image_model.lower():
+        if self.image_model and self.image_model not in self.image_models:
             self.image_models.insert(0, self.image_model)
 
         self._session: Optional[aiohttp.ClientSession] = None
@@ -2722,63 +2727,34 @@ class ImageGenerationEngine:
         if gemini_keys:
             try:
                 session = await self.get_session()
-                native_models = [
-                    "gemini-2.5-flash-image",
-                    "gemini-3.1-flash-image",
-                    "gemini-3.1-flash-lite-image",
-                ]
-
-                if ref_image_base64:
-                    mime = "image/png"
-                    b64_raw = ref_image_base64
-                    if ref_image_base64.startswith("data:"):
-                        header, b64_raw = ref_image_base64.split(",", 1)
-                        mime = header.split(";")[0].replace("data:", "").strip()
-                    google_parts = [
-                        {"inline_data": {"mime_type": mime, "data": b64_raw}},
-                        {"text": f"Based on the provided reference image, generate a new image matching this prompt: {final_prompt}"}
-                    ]
-                else:
-                    google_parts = [
-                        {"text": f"Generate a high-quality image matching this description: {final_prompt}"}
-                    ]
-
-                google_payload = {
-                    "contents": [{"role": "user", "parts": google_parts}]
-                }
-
-                for model_name in native_models:
-                    for g_key in gemini_keys:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={g_key}"
-                        try:
-                            async with session.post(
-                                url,
-                                json=google_payload,
-                                timeout=aiohttp.ClientTimeout(total=40)
-                            ) as g_resp:
-                                if g_resp.status == 200:
-                                    g_data = await g_resp.json(content_type=None)
-                                    candidates = g_data.get("candidates", [])
-                                    if candidates:
-                                        content = candidates[0].get("content", {})
-                                        for part in content.get("parts", []):
-                                            inline = part.get("inlineData") or part.get("inline_data")
-                                            if inline and "data" in inline:
-                                                b64_img = inline["data"]
-                                                img_bytes = base64.b64decode(b64_img)
-                                                if img_bytes and len(img_bytes) > 500:
-                                                    friendly_name = f"Google Gemini ({model_name})"
-                                                    return img_bytes, final_prompt, friendly_name, None
-                                else:
-                                    err_txt = await g_resp.text()
-                                    try:
-                                        err_json = json.loads(err_txt)
-                                        msg = err_json.get("error", {}).get("message", "")
-                                        errors.append(f"Google Gemini Native ({model_name}): HTTP {g_resp.status} - {msg[:120]}")
-                                    except Exception:
-                                        errors.append(f"Google Gemini Native ({model_name}): HTTP {g_resp.status}")
-                        except Exception as ge:
-                            errors.append(f"Google Gemini Native ({model_name}): {str(ge)[:80]}")
+                # 優先嘗試 Google 官方 Imagen 3 生圖模型端點 (:predict)
+                for g_key in gemini_keys:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={g_key}"
+                    predict_payload = {
+                        "instances": [{"prompt": final_prompt}],
+                        "parameters": {"sampleCount": 1}
+                    }
+                    try:
+                        async with session.post(
+                            url,
+                            json=predict_payload,
+                            timeout=aiohttp.ClientTimeout(total=40)
+                        ) as g_resp:
+                            if g_resp.status == 200:
+                                g_data = await g_resp.json(content_type=None)
+                                predictions = g_data.get("predictions", [])
+                                if predictions:
+                                    b64_img = predictions[0].get("bytesBase64Encoded")
+                                    if b64_img:
+                                        img_bytes = base64.b64decode(b64_img)
+                                        if img_bytes and len(img_bytes) > 500:
+                                            friendly_name = "Google Imagen 3 (imagen-3.0-generate-002)"
+                                            return img_bytes, final_prompt, friendly_name, None
+                            else:
+                                err_txt = await g_resp.text()
+                                errors.append(f"Google Imagen 3: HTTP {g_resp.status} - {err_txt[:100]}")
+                    except Exception as ge:
+                        errors.append(f"Google Imagen 3: {str(ge)[:80]}")
             except Exception as e:
                 errors.append(f"Google Gemini 原生通道異常: {str(e)[:80]}")
 
@@ -2812,10 +2788,9 @@ class ImageGenerationEngine:
                 else:
                     message_content = f"Generate a high-quality image: {final_prompt}"
 
-                gemini_openrouter_models = [m for m in self.image_models if "pro" not in m.lower()] or [
-                    "google/gemini-2.5-flash-image",
-                    "google/gemini-3.1-flash-image",
-                    "google/gemini-3.1-flash-lite-image",
+                gemini_openrouter_models = [m for m in self.image_models if m] or [
+                    "google/gemini-2.0-flash-001",
+                    "anthropic/claude-3.5-sonnet"
                 ]
 
                 for api_key in api_keys:
@@ -3702,11 +3677,29 @@ class AIChat(commands.Cog):
 
         return data
 
+    @staticmethod
+    def _atomic_json_write(path: str, data: Any):
+        """原子寫入 JSON 檔案，防止斷電或崩潰導致檔案損壞或清空"""
+        dir_name = os.path.dirname(path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+        tmp_path = f"{path}.tmp.{os.getpid()}.{time.time()}"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, path)
+        except Exception:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+            raise
+
     def save_config(self, guild_id: int, data: dict):
-        """保存伺服器 AI 設定"""
+        """保存伺服器 AI 設定（原子寫入）"""
         path = self.get_config_path(guild_id)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        self._atomic_json_write(path, data)
 
     def get_user_memory(self, guild_id: int, user_id: int) -> List[Dict[str, Any]]:
         """獲取用戶對話記憶 (從 data/<群ID>/ai-memory/<用戶ID>.json)，包含 2 小時會話過期判定與長度防護"""
@@ -3741,10 +3734,9 @@ class AIChat(commands.Cog):
             return []
 
     def save_user_memory(self, guild_id: int, user_id: int, history: List[Dict[str, Any]]):
-        """儲存用戶對話記憶"""
+        """儲存用戶對話記憶（原子寫入）"""
         path = self.get_user_memory_path(guild_id, user_id)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
+        self._atomic_json_write(path, history)
 
     def append_user_memory(self, guild_id: int, user_id: int, user_text: str, ai_text: str):
         """記錄單一用戶對話上下文記憶（附帶時間戳，保留最近 10 輪對話）"""
@@ -3809,10 +3801,9 @@ class AIChat(commands.Cog):
             return []
 
     def save_channel_memory(self, guild_id: int, channel_id: int, history: List[Dict[str, Any]]):
-        """儲存頻道群體對話記憶"""
+        """儲存頻道群體對話記憶（原子寫入）"""
         path = self.get_channel_memory_path(guild_id, channel_id)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
+        self._atomic_json_write(path, history)
 
     def append_channel_memory(self, guild_id: int, channel_id: int, user_text: str, ai_text: str):
         """記錄頻道群體對話上下文記憶（附帶時間戳與發言者姓名，保留最近 10 輪對話）"""
@@ -4322,13 +4313,18 @@ class AIChat(commands.Cog):
 
                     # 特殊處理 attachment:// 協議 (例如機器人剛發送的生圖卡片)
                     if img_url.startswith("attachment://"):
-                        local_fname = img_url.replace("attachment://", "").strip()
+                        raw_fname = img_url.replace("attachment://", "").strip()
+                        local_fname = os.path.basename(raw_fname)
+                        if not local_fname or ".." in raw_fname:
+                            continue
                         found_att = next((a for a in getattr(src_msg, "attachments", []) if a.filename == local_fname), None)
                         if not found_att and getattr(src_msg, "attachments", []):
                             found_att = src_msg.attachments[0]
                         if found_att:
                             try:
                                 img_bytes = await found_att.read()
+                                if len(img_bytes) > 15 * 1024 * 1024:
+                                    continue
                                 mime_type = get_attachment_mime_type(found_att)
                                 if guild_id:
                                     self.save_abuse_prevention_image(guild_id, user_id, img_bytes, local_fname, mime_type, 0)
@@ -4339,17 +4335,21 @@ class AIChat(commands.Cog):
                             except Exception as att_err:
                                 print(f"[AI] 從 attachment:// 讀取附件失敗: {att_err}")
 
-                        # 嘗試從本機歷史快取目錄讀取
+                        # 嘗試從本機歷史快取目錄讀取（嚴格限制在 ./data/images 目錄下防禦路徑穿越）
                         possible_local_paths = [
                             f"./data/images/{guild_id}/ai-create/{local_fname}",
                             f"./data/images/{guild_id}/{local_fname}",
                             f"./data/images/0/ai-create/{local_fname}",
                         ]
+                        allowed_base = os.path.abspath("./data/images")
                         for lp in possible_local_paths:
-                            if os.path.exists(lp):
+                            real_p = os.path.abspath(lp)
+                            if real_p.startswith(allowed_base) and os.path.exists(real_p):
                                 try:
-                                    with open(lp, "rb") as lf:
+                                    with open(real_p, "rb") as lf:
                                         img_bytes = lf.read()
+                                    if len(img_bytes) > 15 * 1024 * 1024:
+                                        break
                                     b64_data = base64.b64encode(img_bytes).decode("utf-8")
                                     image_parts.append({"inline_data": {"mime_type": "image/png", "data": b64_data}})
                                     image_filenames.append(local_fname)
@@ -4365,7 +4365,12 @@ class AIChat(commands.Cog):
                         async with aiohttp.ClientSession() as session:
                             async with session.get(img_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                                 if resp.status == 200:
+                                    clength = resp.headers.get("Content-Length")
+                                    if clength and int(clength) > 15 * 1024 * 1024:
+                                        continue
                                     img_bytes = await resp.read()
+                                    if len(img_bytes) > 15 * 1024 * 1024:
+                                        continue
                                     ctype = resp.headers.get("Content-Type", "image/png").split(";")[0].strip()
                                     if not ctype.startswith("image/"):
                                         ctype = "image/png"
@@ -4886,7 +4891,7 @@ class AIChat(commands.Cog):
         if switch_intent:
             model_key, sub_query, is_guild = switch_intent
             embed, display_name = self.apply_model_switch(
-                guild_id=message.guild.id,
+                guild_id=guild_id,
                 user=message.author,
                 model_key=model_key,
                 is_guild=is_guild,
@@ -4905,7 +4910,7 @@ class AIChat(commands.Cog):
         if persona_intent:
             p_key, sub_query, is_guild = persona_intent
             embed, display_name = self.apply_persona_switch(
-                guild_id=message.guild.id,
+                guild_id=guild_id,
                 user=message.author,
                 persona_key=p_key,
                 is_guild=is_guild,
@@ -4956,8 +4961,8 @@ class AIChat(commands.Cog):
 
             thinking_msg = await message.reply(f"🌐 正在啟動瀏覽器代理人檢視 `{target_url}` 中...")
             user_display = message.author.display_name
-            system_prompt = self.build_system_prompt(message.guild.id, config, member=message.author)
-            eff_prov, eff_model = self.get_effective_ai(message.guild.id, message.author.id, config)
+            system_prompt = self.build_system_prompt(guild_id, config, member=message.author)
+            eff_prov, eff_model = self.get_effective_ai(guild_id, message.author.id, config)
 
             ai_reply, embed = await self.browser_agent.inspect_url(
                 url=target_url,
@@ -4970,12 +4975,12 @@ class AIChat(commands.Cog):
 
             is_error = ai_reply.startswith("⚠️") or ai_reply.startswith("❌")
             if not is_error:
-                self.record_usage(message.guild.id, message.author.id, config)
+                self.record_usage(guild_id, message.author.id, config)
                 browser_mem_user = f"[{user_display}] [瀏覽器代理人查看 {target_url}]: {sub_query or '摘要'}"
                 if is_ai_channel and message.guild:
-                    self.append_channel_memory(message.guild.id, message.channel.id, browser_mem_user, ai_reply)
+                    self.append_channel_memory(guild_id, message.channel.id, browser_mem_user, ai_reply)
                 else:
-                    self.append_user_memory(message.guild.id, message.author.id, browser_mem_user, ai_reply)
+                    self.append_user_memory(guild_id, message.author.id, browser_mem_user, ai_reply)
 
             await self.deliver_ai_response_message(
                 thinking_msg=thinking_msg,
@@ -5028,15 +5033,15 @@ class AIChat(commands.Cog):
                     return
 
                 # 記錄用量與對話記憶 (累計 total_messages 與 user_draws)
-                self.record_usage(message.guild.id, message.author.id, config, has_image=bool(ref_image_b64), is_draw=True)
+                self.record_usage(guild_id, message.author.id, config, has_image=bool(ref_image_b64), is_draw=True)
                 user_display = message.author.display_name
                 mode_tag = "[AI 圖片修改/風格轉換]" if (is_image_edit and ref_image_b64) else "[AI 繪圖]"
                 draw_mem_user = f"[{user_display}] {mode_tag}: {active_prompt or clean_text}"
                 draw_mem_ai = f"[已生成圖片: {final_prompt}]"
                 if is_ai_channel and message.guild:
-                    self.append_channel_memory(message.guild.id, message.channel.id, draw_mem_user, draw_mem_ai)
+                    self.append_channel_memory(guild_id, message.channel.id, draw_mem_user, draw_mem_ai)
                 else:
-                    self.append_user_memory(message.guild.id, message.author.id, draw_mem_user, draw_mem_ai)
+                    self.append_user_memory(guild_id, message.author.id, draw_mem_user, draw_mem_ai)
 
                 # 儲存 AI 生成圖片至本地 /data/images/<群ID>/ai-create/，命名格式與用戶上傳完全一致
                 guild_id = message.guild.id if message.guild else 0
@@ -5098,9 +5103,9 @@ class AIChat(commands.Cog):
             arch_mem_user = f"[{user_display}]: {clean_text}"
             arch_mem_ai = f"[{bot_name} 已展示核心組件架構與功能清單]"
             if is_ai_channel and message.guild:
-                self.append_channel_memory(message.guild.id, message.channel.id, arch_mem_user, arch_mem_ai)
+                self.append_channel_memory(guild_id, message.channel.id, arch_mem_user, arch_mem_ai)
             else:
-                self.append_user_memory(message.guild.id if message.guild else 0, message.author.id, arch_mem_user, arch_mem_ai)
+                self.append_user_memory(guild_id, message.author.id, arch_mem_user, arch_mem_ai)
             return
 
         # 設定提示詞文字與歷史記憶記錄字串
@@ -5153,9 +5158,9 @@ class AIChat(commands.Cog):
                 thinking_msg = await message.reply(thinking_text)
             # 準備記憶上下文 (專屬 AI 頻道使用群體記憶，普通頻道使用用戶個人記憶)
             if is_ai_channel and message.guild:
-                history = self.get_channel_memory(message.guild.id, message.channel.id)
+                history = self.get_channel_memory(guild_id, message.channel.id)
             else:
-                history = self.get_user_memory(message.guild.id, message.author.id)
+                history = self.get_user_memory(guild_id, message.author.id)
             contents = list(history)
 
             # 當前輪次內容：附帶用戶名稱以供精準辨識，若有引用回覆則融入引用上下文
@@ -5210,7 +5215,7 @@ class AIChat(commands.Cog):
             is_time_query = HostTimeService.detect_time_intent(clean_text)
             time_context = HostTimeService.get_host_time_block(is_specific_query=is_time_query)
 
-            system_prompt = self.build_system_prompt(message.guild.id, config, member=message.author)
+            system_prompt = self.build_system_prompt(guild_id, config, member=message.author)
             if search_context:
                 system_prompt += search_context
             if webpage_context:
@@ -5218,7 +5223,7 @@ class AIChat(commands.Cog):
             # 時鐘永遠置於最末端，擁有最高注意力優先級，絕不受搜尋或歷史干擾
             system_prompt += time_context
 
-            eff_prov, eff_model = self.get_effective_ai(message.guild.id, message.author.id, config)
+            eff_prov, eff_model = self.get_effective_ai(guild_id, message.author.id, config)
 
             # 呼叫 AI (支援 DeepSeek 與 OpenRouter，並可連動 Web 搜尋插件)
             ai_reply = await self.ai_client.generate_response(
@@ -5249,12 +5254,12 @@ class AIChat(commands.Cog):
             is_error = ai_reply.startswith("⚠️") or ai_reply.startswith("❌")
             if not is_error:
                 # 記錄用量與記憶（僅存文字描述，包含發言者名稱，避免 base64 暴增記憶庫）
-                self.record_usage(message.guild.id, message.author.id, config, has_image=bool(image_parts))
+                self.record_usage(guild_id, message.author.id, config, has_image=bool(image_parts))
                 chat_mem_user = f"[{user_display} | {time_stamp_str}] {memory_user_text}"
                 if is_ai_channel and message.guild:
-                    self.append_channel_memory(message.guild.id, message.channel.id, chat_mem_user, ai_reply)
+                    self.append_channel_memory(guild_id, message.channel.id, chat_mem_user, ai_reply)
                 else:
-                    self.append_user_memory(message.guild.id, message.author.id, chat_mem_user, ai_reply)
+                    self.append_user_memory(guild_id, message.author.id, chat_mem_user, ai_reply)
 
             # 交付回應訊息（支援超長文字自動轉 .txt 附件與 AI 生成檔案附件）
             await self.deliver_ai_response_message(
@@ -7320,6 +7325,8 @@ class AIChat(commands.Cog):
         """模組卸載時關閉長連接連線池並移除 ContextMenu 避免衝突"""
         if hasattr(self, "ai_client") and self.ai_client:
             asyncio.create_task(self.ai_client.close())
+        if hasattr(self, "image_engine") and self.image_engine:
+            asyncio.create_task(self.image_engine.close())
         if hasattr(self, "ctx_image_edit") and self.ctx_image_edit and hasattr(self, "bot") and self.bot:
             try:
                 self.bot.tree.remove_command(self.ctx_image_edit.name, type=self.ctx_image_edit.type)

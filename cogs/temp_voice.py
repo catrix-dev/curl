@@ -39,8 +39,18 @@ class TempVoice(commands.Cog):
     def save_config(self, guild_id: int, config: dict):
         """儲存臨時語音配置"""
         file_path = self.get_config_file(guild_id)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
+        tmp_file = file_path + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_file, file_path)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     voice_group = app_commands.Group(name="臨時語音", description="臨時語音頻道管理")
     
@@ -257,10 +267,13 @@ class TempVoice(commands.Cog):
             # 移動用戶到新頻道
             try:
                 await member.move_to(temp_channel)
-            except:
+            except Exception:
                 # 如果移動失敗，刪除頻道
-                await temp_channel.delete()
-                del self.temp_channels[temp_channel.id]
+                try:
+                    await temp_channel.delete()
+                except Exception:
+                    pass
+                self.temp_channels.pop(temp_channel.id, None)
         
         # 用戶離開頻道 - 檢查是否需要刪除臨時頻道
         if before.channel and before.channel.id in self.temp_channels:
@@ -275,17 +288,32 @@ class TempVoice(commands.Cog):
                 if channel and len(channel.members) == 0 and channel_id in self.temp_channels:
                     try:
                         await channel.delete()
-                        del self.temp_channels[channel_id]
+                        self.temp_channels.pop(channel_id, None)
                         print(f'🗑️ 已刪除空的臨時頻道: {channel.name}')
                     except Exception as e:
                         print(f'❌ 刪除臨時頻道失敗: {e}')
-                        # 如果刪除失敗，從追蹤列表中移除
-                        if channel_id in self.temp_channels:
-                            del self.temp_channels[channel_id]
+                        self.temp_channels.pop(channel_id, None)
     
     @commands.Cog.listener()
     async def on_ready(self):
         print(f'📦 {self.__class__.__name__} cog已載入')
+        # 清理重啟後殘留的空置臨時語音頻道
+        for guild in self.bot.guilds:
+            try:
+                config = self.load_config(guild.id)
+                if not config.get('enabled') or not config.get('category_id'):
+                    continue
+                category = guild.get_channel(config['category_id'])
+                if category and isinstance(category, discord.CategoryChannel):
+                    for ch in category.voice_channels:
+                        if ch.id != config.get('trigger_channel_id') and len(ch.members) == 0:
+                            try:
+                                await ch.delete(reason="清理重啟殘留的空臨時語音頻道")
+                                print(f'🗑️ 清理殘留臨時頻道: {ch.name}')
+                            except Exception:
+                                pass
+            except Exception:
+                pass
 
 async def setup(bot):
     await bot.add_cog(TempVoice(bot))

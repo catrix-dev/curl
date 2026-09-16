@@ -5,6 +5,7 @@ import json
 import os
 from datetime import datetime, timedelta
 import random
+import asyncio
 
 class Daily(commands.Cog):
     """每日簽到系統"""
@@ -13,6 +14,7 @@ class Daily(commands.Cog):
         self.bot = bot
         self.data_dir = "data"
         self.daily_data = {}
+        self.lock = asyncio.Lock()
         os.makedirs(self.data_dir, exist_ok=True)
     
     def get_data_file(self, guild_id: str):
@@ -32,8 +34,18 @@ class Daily(commands.Cog):
     def save_data(self, guild_id: str):
         """保存簽到數據"""
         data_file = self.get_data_file(guild_id)
-        with open(data_file, 'w', encoding='utf-8') as f:
-            json.dump(self.daily_data.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+        tmp_file = data_file + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(self.daily_data.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, data_file)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     def get_user_data(self, guild_id: str, user_id: str):
         """獲取用戶簽到數據"""
@@ -80,39 +92,48 @@ class Daily(commands.Cog):
         guild_id = str(interaction.guild.id)
         user_id = str(interaction.user.id)
         
-        data = self.get_user_data(guild_id, user_id)
-        
-        # 檢查是否可以簽到
-        if not self.can_checkin(data["last_checkin"]):
-            last = datetime.fromisoformat(data["last_checkin"])
-            next_checkin = last + timedelta(days=1)
-            time_left = next_checkin - datetime.utcnow()
-            hours = int(time_left.total_seconds() // 3600)
-            minutes = int((time_left.total_seconds() % 3600) // 60)
+        async with self.lock:
+            data = self.get_user_data(guild_id, user_id)
             
-            await interaction.response.send_message(
-                f"❌ 你今天已經簽到過了！\n下次簽到時間：{hours} 小時 {minutes} 分鐘後",
-                ephemeral=True
-            )
-            return
+            # 檢查是否可以簽到
+            if not self.can_checkin(data["last_checkin"]):
+                last = datetime.fromisoformat(data["last_checkin"])
+                next_checkin = last + timedelta(days=1)
+                time_left = next_checkin - datetime.utcnow()
+                hours = int(time_left.total_seconds() // 3600)
+                minutes = int((time_left.total_seconds() % 3600) // 60)
+                
+                await interaction.response.send_message(
+                    f"❌ 你今天已經簽到過了！\n下次簽到時間：{hours} 小時 {minutes} 分鐘後",
+                    ephemeral=True
+                )
+                return
+            
+            # 檢查連續簽到
+            if self.is_consecutive(data["last_checkin"]):
+                data["streak"] += 1
+            else:
+                data["streak"] = 1
+            
+            # 計算獎勵
+            base_points = random.randint(50, 100)
+            streak_bonus = min(data["streak"] * 5, 100)  # 最多額外 100 分
+            total_points = base_points + streak_bonus
+            
+            # 更新數據
+            data["last_checkin"] = datetime.utcnow().isoformat()
+            data["total_checkins"] += 1
+            data["total_points"] += total_points
+            
+            self.save_data(guild_id)
+            streak_val = data["streak"]
+            total_pts = data["total_points"]
+            total_chks = data["total_checkins"]
         
-        # 檢查連續簽到
-        if self.is_consecutive(data["last_checkin"]):
-            data["streak"] += 1
-        else:
-            data["streak"] = 1
-        
-        # 計算獎勵
-        base_points = random.randint(50, 100)
-        streak_bonus = min(data["streak"] * 5, 100)  # 最多額外 100 分
-        total_points = base_points + streak_bonus
-        
-        # 更新數據
-        data["last_checkin"] = datetime.utcnow().isoformat()
-        data["total_checkins"] += 1
-        data["total_points"] += total_points
-        
-        self.save_data(guild_id)
+        # 觸發成就檢查
+        achievements_cog = self.bot.get_cog("Achievements")
+        if achievements_cog:
+            asyncio.create_task(achievements_cog.check_achievements(interaction.user, interaction.guild, "daily", streak_val))
         
         # 創建嵌入訊息
         embed = discord.Embed(
@@ -123,8 +144,8 @@ class Daily(commands.Cog):
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
         
         embed.add_field(name="獲得積分", value=f"🪙 **{total_points}** 分", inline=True)
-        embed.add_field(name="連續簽到", value=f"🔥 **{data['streak']}** 天", inline=True)
-        embed.add_field(name="總積分", value=f"💰 **{data['total_points']}** 分", inline=True)
+        embed.add_field(name="連續簽到", value=f"🔥 **{streak_val}** 天", inline=True)
+        embed.add_field(name="總積分", value=f"💰 **{total_pts}** 分", inline=True)
         
         if streak_bonus > 0:
             embed.add_field(
@@ -133,7 +154,7 @@ class Daily(commands.Cog):
                 inline=False
             )
         
-        embed.set_footer(text=f"第 {data['total_checkins']} 次簽到")
+        embed.set_footer(text=f"第 {total_chks} 次簽到")
         
         await interaction.response.send_message(embed=embed)
     
@@ -177,13 +198,14 @@ class Daily(commands.Cog):
     @daily_group.command(name="排行榜", description="查看簽到積分排行榜")
     async def leaderboard(self, interaction: discord.Interaction):
         """簽到排行榜"""
+        await interaction.response.defer()
         guild_id = str(interaction.guild.id)
         
         if guild_id not in self.daily_data:
             self.daily_data[guild_id] = self.load_data(guild_id)
         
         if not self.daily_data[guild_id]:
-            await interaction.response.send_message("❌ 目前沒有任何簽到記錄", ephemeral=True)
+            await interaction.followup.send("❌ 目前沒有任何簽到記錄", ephemeral=True)
             return
         
         # 排序用戶
@@ -204,18 +226,22 @@ class Daily(commands.Cog):
         
         for idx, (user_id, data) in enumerate(sorted_users, 1):
             try:
-                user = await self.bot.fetch_user(int(user_id))
+                uid = int(user_id)
+                user = interaction.guild.get_member(uid) if interaction.guild else None
+                if not user:
+                    user = await self.bot.fetch_user(uid)
+                name = user.display_name if user else f"未知用戶 ({user_id})"
                 medal = medals[idx-1] if idx <= 3 else f"#{idx}"
                 
                 embed.add_field(
-                    name=f"{medal} {user.name}",
+                    name=f"{medal} {name}",
                     value=f"積分: **{data['total_points']}** 💰\n連續: {data['streak']} 天 🔥\n簽到: {data['total_checkins']} 次",
                     inline=False
                 )
             except:
                 continue
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
     
     @daily_group.command(name="重置", description="重置用戶簽到數據（需要管理員權限）")
     @app_commands.checks.has_permissions(administrator=True)

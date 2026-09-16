@@ -39,12 +39,19 @@ class AutoReply(commands.Cog):
     def save_auto_replies(self, guild_id, data):
         """保存自動回覆規則"""
         file_path = self.get_auto_reply_file(guild_id)
-        
-        # 確保目錄存在
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        tmp_file = file_path + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_file, file_path)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -113,11 +120,13 @@ class AutoReply(commands.Cog):
                 else:
                     matched = message_content.lower().endswith(trigger.lower())
             elif match_type == 'regex':
-                # 正則表達式
+                # 正則表達式防 ReDoS：限制長度並捕獲異常
+                if len(trigger) > 200:
+                    continue
                 try:
                     flags = 0 if rule.get('case_sensitive', False) else re.IGNORECASE
-                    matched = re.search(trigger, message_content, flags=flags) is not None
-                except:
+                    matched = re.search(trigger, message_content[:1000], flags=flags) is not None
+                except Exception:
                     continue
             
             if matched:
@@ -198,6 +207,16 @@ class AutoReply(commands.Cog):
                 ephemeral=True
             )
             return
+        
+        if 匹配類型 == 'regex':
+            if len(觸發詞) > 200:
+                await interaction.response.send_message("❌ 正則表達式長度不能超過 200 字符", ephemeral=True)
+                return
+            try:
+                re.compile(觸發詞)
+            except re.error as err:
+                await interaction.response.send_message(f"❌ 無效的正則表達式: {err}", ephemeral=True)
+                return
         
         # 載入現有規則
         data = self.load_auto_replies(interaction.guild_id)

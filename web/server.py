@@ -1149,17 +1149,24 @@ class WebServer:
                 for user_id, user_achievements in achievements_data.items():
                     member = guild.get_member(int(user_id))
                     
-                    # 豐富成就信息
+                    # 豐富成就信息（支援 dict 與 list 兼容結構）
                     enriched_list = []
-                    for ach_id in user_achievements:
+                    if isinstance(user_achievements, dict):
+                        unlocked_ids = user_achievements.get('unlocked', [])
+                    elif isinstance(user_achievements, list):
+                        unlocked_ids = user_achievements
+                    else:
+                        unlocked_ids = []
+
+                    for ach_id in unlocked_ids:
                         if ach_id in achievement_defs:
                             ach_def = achievement_defs[ach_id]
                             enriched_list.append({
                                 'id': ach_id,
-                                'name': ach_def['name'],
-                                'description': ach_def['description'],
-                                'rarity': ach_def['rarity'],
-                                'category': ach_def['category']
+                                'name': ach_def.get('name', ach_id),
+                                'description': ach_def.get('description', ''),
+                                'rarity': ach_def.get('tier', 'common'),
+                                'category': ach_def.get('category', 'general')
                             })
                     
                     enriched_achievements[user_id] = {
@@ -1170,7 +1177,7 @@ class WebServer:
                         'achievement_count': len(enriched_list)
                     }
             else:
-                enriched_achievements = {uid: {'username': '未知', 'achievements': achs, 'achievement_count': len(achs)} 
+                enriched_achievements = {uid: {'username': '未知', 'achievements': achs.get('unlocked', []) if isinstance(achs, dict) else achs, 'achievement_count': len(achs.get('unlocked', []) if isinstance(achs, dict) else achs)} 
                                         for uid, achs in achievements_data.items()}
             
             return web.json_response({'achievements': enriched_achievements})
@@ -1203,12 +1210,27 @@ class WebServer:
             else:
                 achievements_data = {}
             
-            # 添加成就
-            if user_id not in achievements_data:
-                achievements_data[user_id] = []
+            achievements_cog = self.bot.get_cog('Achievements')
+            if achievements_cog:
+                success = achievements_cog.unlock_achievement(int(guild_id), int(user_id), achievement_id)
+                if success:
+                    return web.json_response({'success': True, 'message': '成就已授予'})
+                else:
+                    return web.json_response({'success': False, 'message': '用戶已擁有此成就'})
+
+            # 添加成就（使用標準 dict schema）
+            if user_id not in achievements_data or isinstance(achievements_data[user_id], list):
+                old_list = achievements_data.get(user_id, []) if isinstance(achievements_data.get(user_id), list) else []
+                achievements_data[user_id] = {
+                    'unlocked': list(old_list),
+                    'progress': {}
+                }
             
-            if achievement_id not in achievements_data[user_id]:
-                achievements_data[user_id].append(achievement_id)
+            if achievement_id not in achievements_data[user_id]['unlocked']:
+                achievements_data[user_id]['unlocked'].append(achievement_id)
+                achievements_data[user_id][achievement_id] = {
+                    'unlocked_at': datetime.utcnow().isoformat()
+                }
                 
                 # 保存
                 os.makedirs(f'./data/{guild_id}', exist_ok=True)
@@ -2425,14 +2447,22 @@ class WebServer:
                     "date": today,
                     "total_messages": 0,
                     "users": {},
-                    "user_images": {}
+                    "user_images": {},
+                    "user_draws": {}
                 }
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(config, f, ensure_ascii=False, indent=2)
-            elif "user_images" not in daily_usage:
-                daily_usage["user_images"] = {}
-                config["daily_usage"] = daily_usage
+            else:
+                updated_usage = False
+                if "user_images" not in daily_usage:
+                    daily_usage["user_images"] = {}
+                    updated_usage = True
+                if "user_draws" not in daily_usage:
+                    daily_usage["user_draws"] = {}
+                    updated_usage = True
+                if updated_usage:
+                    config["daily_usage"] = daily_usage
 
             # 讀取 server-memory.db 專屬提示詞 (支援多條累加紀錄)
             db_file = os.path.join('data', str(guild_id), 'server-memory.db')

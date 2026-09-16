@@ -29,8 +29,18 @@ class Moderation(commands.Cog):
     def save_warnings(self, guild_id, data):
         """保存警告數據"""
         file_path = f'{self.get_data_path(guild_id)}/warnings.json'
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        tmp_file = file_path + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            os.replace(tmp_file, file_path)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     async def check_auto_punishment(self, interaction: discord.Interaction, member: discord.Member, warn_count: int):
         """檢查並執行自動處罰"""
@@ -64,6 +74,19 @@ class Moderation(commands.Cog):
     @app_commands.checks.has_permissions(kick_members=True)
     async def kick(self, interaction: discord.Interaction, member: discord.Member, reason: str = "無理由"):
         """踢出成員"""
+        if member == interaction.user:
+            await interaction.response.send_message("❌ 你不能踢出自己！", ephemeral=True)
+            return
+        if member.id == interaction.guild.owner_id:
+            await interaction.response.send_message("❌ 無法踢出伺服器擁有者！", ephemeral=True)
+            return
+        if member.top_role >= interaction.user.top_role and interaction.user.id != interaction.guild.owner_id:
+            await interaction.response.send_message("❌ 你的身份組層級不能低於或等於該用戶！", ephemeral=True)
+            return
+        if member.top_role >= interaction.guild.me.top_role:
+            await interaction.response.send_message("❌ 我的身份組層級低於或等於該用戶，無法執行踢出！", ephemeral=True)
+            return
+
         try:
             await member.kick(reason=reason)
             embed = discord.Embed(
@@ -81,6 +104,19 @@ class Moderation(commands.Cog):
     @app_commands.checks.has_permissions(ban_members=True)
     async def ban(self, interaction: discord.Interaction, member: discord.Member, reason: str = "無理由"):
         """封鎖成員"""
+        if member == interaction.user:
+            await interaction.response.send_message("❌ 你不能封鎖自己！", ephemeral=True)
+            return
+        if member.id == interaction.guild.owner_id:
+            await interaction.response.send_message("❌ 無法封鎖伺服器擁有者！", ephemeral=True)
+            return
+        if member.top_role >= interaction.user.top_role and interaction.user.id != interaction.guild.owner_id:
+            await interaction.response.send_message("❌ 你的身份組層級不能低於或等於該用戶！", ephemeral=True)
+            return
+        if member.top_role >= interaction.guild.me.top_role:
+            await interaction.response.send_message("❌ 我的身份組層級低於或等於該用戶，無法執行封鎖！", ephemeral=True)
+            return
+
         try:
             await member.ban(reason=reason)
             embed = discord.Embed(

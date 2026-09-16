@@ -359,6 +359,14 @@ class Tickets(commands.Cog):
         if not ticket_id:
             await interaction.response.send_message("❌ 這不是一個客服單頻道", ephemeral=True)
             return
+
+        # 權限檢查：僅限客服單創建者或管理人員
+        ticket_creator = data['tickets'][ticket_id].get('user_id')
+        is_creator = str(interaction.user.id) == str(ticket_creator)
+        is_staff = interaction.user.guild_permissions.manage_channels
+        if not (is_creator or is_staff):
+            await interaction.response.send_message("❌ 您沒有權限管理此客服單成員", ephemeral=True)
+            return
         
         # 添加權限
         await interaction.channel.set_permissions(用戶, read_messages=True, send_messages=True)
@@ -380,6 +388,18 @@ class Tickets(commands.Cog):
         
         if not ticket_id:
             await interaction.response.send_message("❌ 這不是一個客服單頻道", ephemeral=True)
+            return
+
+        # 權限檢查：僅限客服單創建者或管理人員
+        ticket_creator = data['tickets'][ticket_id].get('user_id')
+        is_creator = str(interaction.user.id) == str(ticket_creator)
+        is_staff = interaction.user.guild_permissions.manage_channels
+        if not (is_creator or is_staff):
+            await interaction.response.send_message("❌ 您沒有權限管理此客服單成員", ephemeral=True)
+            return
+
+        if str(用戶.id) == str(ticket_creator):
+            await interaction.response.send_message("❌ 不能移除客服單建立者", ephemeral=True)
             return
         
         # 移除權限
@@ -654,14 +674,18 @@ class CloseTicketView(discord.ui.View):
         self.cog = cog
         self.ticket_id = ticket_id
         self.creator_id = creator_id
+        
+        # 使用綁定 ticket_id 的唯一 custom_id，避免跨客服單覆寫衝突
+        close_btn = discord.ui.Button(
+            label="關閉客服單",
+            style=discord.ButtonStyle.red,
+            emoji="🔒",
+            custom_id=f"close_ticket_{ticket_id}"
+        )
+        close_btn.callback = self.close_ticket_button_callback
+        self.add_item(close_btn)
     
-    @discord.ui.button(
-        label="關閉客服單",
-        style=discord.ButtonStyle.red,
-        emoji="🔒",
-        custom_id="close_ticket_button"
-    )
-    async def close_ticket_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def close_ticket_button_callback(self, interaction: discord.Interaction):
         # 檢查權限
         is_owner = str(interaction.user.id) == str(self.creator_id)
         is_staff = interaction.user.guild_permissions.manage_channels

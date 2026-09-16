@@ -228,8 +228,18 @@ class Giveaway(commands.Cog):
 
     def save_user_stats(self, guild_id: int, data: Dict[str, Any]):
         path = self.get_user_stats_path(guild_id)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        tmp_file = path + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_file, path)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
 
     def record_user_message(self, guild_id: int, user_id: int):
         """累加用戶今日發言與總發言次數 (高速記憶體快取，異步定期落盤)"""
@@ -346,8 +356,18 @@ class Giveaway(commands.Cog):
 
     def save_guild_giveaways(self, guild_id: int, data: Dict[str, Any]):
         path = self.get_giveaways_path(guild_id)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        tmp_file = path + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_file, path)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
 
     def get_giveaway(self, guild_id: int, message_id: int) -> Optional[Dict[str, Any]]:
         all_gw = self.load_guild_giveaways(guild_id)
@@ -688,6 +708,8 @@ class Giveaway(commands.Cog):
             await interaction.response.send_message("❌ 該抽獎沒有任何參加者，無法進行重抽！", ephemeral=True)
             return
 
+        await interaction.response.defer(ephemeral=True)
+
         # 排除原獲獎者（若名額充裕）且複驗資格
         old_winners = gw.get("winners", [])
         pool = []
@@ -719,7 +741,7 @@ class Giveaway(commands.Cog):
                         pool.append(uid)
 
         if not pool:
-            await interaction.response.send_message("❌ 目前無任何符合資格的成員可供重抽！", ephemeral=True)
+            await interaction.followup.send("❌ 目前無任何符合資格的成員可供重抽！", ephemeral=True)
             return
 
         draw_count = min(人數, len(pool))
@@ -748,7 +770,7 @@ class Giveaway(commands.Cog):
                 pass
 
         win_mentions = ", ".join(f"<@{uid}>" for uid in new_winners)
-        await interaction.response.send_message(f"✅ 重抽成功！新得主為：{win_mentions}", ephemeral=True)
+        await interaction.followup.send(f"✅ 重抽成功！新得主為：{win_mentions}", ephemeral=True)
 
     @giveaway_group.command(name="取消", description="取消進行中的抽獎活動 (不開獎)")
     @app_commands.describe(訊息id="抽獎訊息的 ID")

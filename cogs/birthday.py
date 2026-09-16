@@ -37,8 +37,18 @@ class Birthday(commands.Cog):
     def save_birthdays(self, guild_id: str):
         """保存生日數據"""
         data_file = self.get_data_file(guild_id, "birthdays")
-        with open(data_file, 'w', encoding='utf-8') as f:
-            json.dump(self.birthdays.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+        tmp_file = data_file + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(self.birthdays.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, data_file)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     def load_settings(self, guild_id: str):
         """載入設定"""
@@ -55,8 +65,18 @@ class Birthday(commands.Cog):
     def save_settings(self, guild_id: str):
         """保存設定"""
         data_file = self.get_data_file(guild_id, "birthday_settings")
-        with open(data_file, 'w', encoding='utf-8') as f:
-            json.dump(self.settings.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+        tmp_file = data_file + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(self.settings.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, data_file)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     def get_birthdays(self, guild_id: str):
         """獲取生日數據"""
@@ -146,12 +166,18 @@ class Birthday(commands.Cog):
         
         # 計算距離生日還有多少天
         today = datetime.now()
-        next_birthday = datetime(today.year, bd['month'], bd['day'])
+        try:
+            next_birthday = datetime(today.year, bd['month'], bd['day'])
+        except ValueError:
+            next_birthday = datetime(today.year, 2, 28)
         
-        if next_birthday < today:
-            next_birthday = datetime(today.year + 1, bd['month'], bd['day'])
+        if next_birthday.date() < today.date():
+            try:
+                next_birthday = datetime(today.year + 1, bd['month'], bd['day'])
+            except ValueError:
+                next_birthday = datetime(today.year + 1, 2, 28)
         
-        days_until = (next_birthday - today).days
+        days_until = (next_birthday.date() - today.date()).days
         
         if days_until == 0:
             embed.add_field(name="距離生日", value="🎉 今天就是生日！", inline=False)
@@ -163,11 +189,12 @@ class Birthday(commands.Cog):
     @birthday_group.command(name="列表", description="查看本月壽星")
     async def list_birthdays(self, interaction: discord.Interaction):
         """列出本月生日"""
+        await interaction.response.defer()
         guild_id = str(interaction.guild.id)
         birthdays = self.get_birthdays(guild_id)
         
         if not birthdays:
-            await interaction.response.send_message("❌ 目前沒有任何生日記錄", ephemeral=True)
+            await interaction.followup.send("❌ 目前沒有任何生日記錄", ephemeral=True)
             return
         
         current_month = datetime.now().month
@@ -181,7 +208,7 @@ class Birthday(commands.Cog):
         month_birthdays.sort(key=lambda x: x[1]["day"])
         
         if not month_birthdays:
-            await interaction.response.send_message("❌ 本月沒有壽星", ephemeral=True)
+            await interaction.followup.send("❌ 本月沒有壽星", ephemeral=True)
             return
         
         embed = discord.Embed(
@@ -192,16 +219,21 @@ class Birthday(commands.Cog):
         
         for user_id, bd in month_birthdays:
             try:
-                user = await self.bot.fetch_user(int(user_id))
+                uid = int(user_id)
+                user = interaction.guild.get_member(uid) if interaction.guild else None
+                if not user:
+                    user = await self.bot.fetch_user(uid)
+                name = user.display_name if user else f"未知用戶 ({user_id})"
+                mention = user.mention if user else f"<@{user_id}>"
                 embed.add_field(
-                    name=f"{bd['month']}/{bd['day']} - {user.name}",
-                    value=f"{user.mention}",
+                    name=f"{bd['month']}/{bd['day']} - {name}",
+                    value=mention,
                     inline=False
                 )
             except:
                 continue
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
     
     @birthday_group.command(name="刪除", description="刪除你的生日")
     async def delete_birthday(self, interaction: discord.Interaction):
@@ -274,12 +306,20 @@ class Birthday(commands.Cog):
             
             # 檢查今天是否有人生日
             for user_id, bd in birthdays.items():
-                if bd["month"] == today.month and bd["day"] == today.day:
+                is_birthday_today = (bd["month"] == today.month and bd["day"] == today.day)
+                if not is_birthday_today and bd["month"] == 2 and bd["day"] == 29 and today.month == 2 and today.day == 28:
                     try:
-                        user = await self.bot.fetch_user(int(user_id))
+                        datetime(today.year, 2, 29)
+                    except ValueError:
+                        is_birthday_today = True
+                
+                if is_birthday_today:
+                    try:
+                        uid = int(user_id)
+                        user = guild.get_member(uid) or await self.bot.fetch_user(uid)
                         
                         message = settings["message"].format(
-                            user=user.mention,
+                            user=user.mention if user else f"<@{user_id}>",
                             server=guild.name
                         )
                         
@@ -288,7 +328,8 @@ class Birthday(commands.Cog):
                             description=message,
                             color=discord.Color.purple()
                         )
-                        embed.set_thumbnail(url=user.display_avatar.url)
+                        if user and hasattr(user, "display_avatar"):
+                            embed.set_thumbnail(url=user.display_avatar.url)
                         embed.timestamp = discord.utils.utcnow()
                         
                         await channel.send(embed=embed)

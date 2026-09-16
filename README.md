@@ -1,8 +1,8 @@
-# curl Discord Bot (v7.0.0)
+# curl Discord Bot (v7.1.0)
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-v7.0.0-blue.svg)](https://github.com/catrix-dev/curl)
+[![Version](https://img.shields.io/badge/version-v7.1.0-blue.svg)](https://github.com/catrix-dev/curl)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Discord.py](https://img.shields.io/badge/discord.py-2.0%2B-green.svg)](https://github.com/Rapptz/discord.py)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
@@ -17,11 +17,11 @@
 
 ---
 
-## 🌟 核心特色 (v7.0.0)
+## 🌟 核心特色 (v7.1.0)
 
 - 🤖 **AI 智慧聊天系統**：
-  - 支援多模型架構：Google Gemini (Gemini 2.5 Flash / Flash Lite)、OpenRouter（Claude / GPT-4o 備援）、DeepSeek (V3 / Reasoner)。
-  - 支援圖片視覺辨識（Vision 多模態）、檔案分析、獨立頻道常駐免 @ 對話。
+  - 支援多模型架構：Google Gemini (Gemini 2.0 Flash / Flash Lite)、OpenRouter（Claude 3.5 Sonnet / Gemini 2.0 備援）、DeepSeek (V3-Chat / Reasoner)。
+  - 支援圖片視覺辨識（Vision 多模態）、原生 Google Imagen 3 與 OpenRouter 繪圖生成、檔案分析、獨立頻道常駐免 @ 對話。
   - 獨立記憶庫機制：群體上下文對話記憶、全域持久記憶與專屬人設 Prompt 自訂。
   - 智慧配額與防護：每日 AI 呼叫額度配置、繪圖/生圖額度限制、黑名單封禁。
 - 🎫 **專業客服工單系統 (Tickets)**：

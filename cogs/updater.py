@@ -125,8 +125,20 @@ class Updater(commands.Cog):
         
         return core_files
     
+    def is_safe_filepath(self, filepath: str) -> bool:
+        """檢查下載路徑是否在專案目錄內，防止路徑穿越"""
+        try:
+            base_dir = os.path.abspath('.')
+            target_path = os.path.abspath(os.path.join(base_dir, filepath))
+            return os.path.commonpath([base_dir, target_path]) == base_dir and not os.path.isabs(filepath)
+        except Exception:
+            return False
+
     async def download_file(self, filepath):
         """從 GitHub 下載單個文件"""
+        if not self.is_safe_filepath(filepath):
+            print(f"      ❌ 安全攔截：非法下載路徑 {filepath}")
+            return False
         try:
             file_url = f"https://raw.githubusercontent.com/{self.github_repo}/refs/heads/{self.branch}/{filepath}"
             
@@ -135,12 +147,22 @@ class Updater(commands.Cog):
                     if resp.status == 200:
                         content = await resp.read()
                         
-                        # 確保目錄存在
-                        os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else '.', exist_ok=True)
+                        target_dir = os.path.dirname(filepath) if os.path.dirname(filepath) else '.'
+                        os.makedirs(target_dir, exist_ok=True)
                         
-                        # 寫入文件
-                        with open(filepath, 'wb') as f:
-                            f.write(content)
+                        # 原子寫入
+                        tmp_file = filepath + f".tmp_{os.getpid()}"
+                        try:
+                            with open(tmp_file, 'wb') as f:
+                                f.write(content)
+                            os.replace(tmp_file, filepath)
+                        except Exception:
+                            if os.path.exists(tmp_file):
+                                try:
+                                    os.remove(tmp_file)
+                                except OSError:
+                                    pass
+                            raise
                         
                         return True
                     else:
@@ -209,11 +231,17 @@ class Updater(commands.Cog):
         print(f"\n   ✅ 成功: {success_count} 個文件")
         if fail_count > 0:
             print(f"   ❌ 失敗: {fail_count} 個文件")
+            if success_count == 0:
+                print("   ⚠️ 所有文件更新失敗，取消更新與重啟。")
+                print("─" * 62)
+                return
         
         # 更新本地版本號
         try:
-            with open('./version.txt', 'w', encoding='utf-8') as f:
+            tmp_ver = f"./version.txt.tmp_{os.getpid()}"
+            with open(tmp_ver, 'w', encoding='utf-8') as f:
                 f.write(f"versions = {remote_version}")
+            os.replace(tmp_ver, './version.txt')
             print(f"\n   🎊 更新完成！版本已升級至 {remote_version}")
             print("   🔄 正在自動重啟機器人以應用更新...")
             print("─" * 62)
@@ -221,10 +249,14 @@ class Updater(commands.Cog):
             # 等待一小段時間讓訊息顯示
             await asyncio.sleep(2)
             
-            # 自動重啟機器人 (支援 Linux/Windows)
+            # 關閉 bot 連接後自動重啟機器人 (支援 Linux/Windows)
+            try:
+                await self.bot.close()
+            except Exception:
+                pass
             os.execv(sys.executable, [sys.executable] + sys.argv)
         except Exception as e:
-            print(f"   ❌ 寫入版本文件失敗: {e}")
+            print(f"   ❌ 寫入版本文件或重啟失敗: {e}")
             print("─" * 62)
     
     @commands.Cog.listener()

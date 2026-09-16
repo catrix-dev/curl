@@ -5,6 +5,7 @@ import json
 import os
 from datetime import datetime, timedelta
 import random
+import asyncio
 
 class Leveling(commands.Cog):
     """等級系統"""
@@ -34,8 +35,18 @@ class Leveling(commands.Cog):
     def save_data(self, guild_id: str):
         """保存伺服器等級數據"""
         data_file = self.get_data_file(guild_id)
-        with open(data_file, 'w', encoding='utf-8') as f:
-            json.dump(self.levels.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+        tmp_file = data_file + f".tmp_{os.getpid()}"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(self.levels.get(guild_id, {}), f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, data_file)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+            raise
     
     def get_user_data(self, guild_id: str, user_id: str):
         """获取用戶数据"""
@@ -123,10 +134,11 @@ class Leveling(commands.Cog):
     @level_group.command(name="排行榜", description="查看伺服器排行榜")
     async def leaderboard(self, interaction: discord.Interaction):
         """顯示排行榜"""
+        await interaction.response.defer()
         guild_id = str(interaction.guild.id)
         
         if guild_id not in self.levels or not self.levels[guild_id]:
-            await interaction.response.send_message("❌ 該伺服器还沒有等級数据", ephemeral=True)
+            await interaction.followup.send("❌ 該伺服器还沒有等級数据", ephemeral=True)
             return
         
         # 排序用戶
@@ -147,18 +159,22 @@ class Leveling(commands.Cog):
         
         for idx, (user_id, data) in enumerate(sorted_users, 1):
             try:
-                user = await self.bot.fetch_user(int(user_id))
+                uid = int(user_id)
+                user = interaction.guild.get_member(uid) if interaction.guild else None
+                if not user:
+                    user = await self.bot.fetch_user(uid)
+                name = user.display_name if user else f"未知用戶 ({user_id})"
                 medal = medals[idx-1] if idx <= 3 else f"#{idx}"
                 
                 embed.add_field(
-                    name=f"{medal} {user.name}",
+                    name=f"{medal} {name}",
                     value=f"等級: **{data['level']}** | 經驗: {data['xp']} XP\n訊息: {data['messages']}",
                     inline=False
                 )
             except:
                 continue
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
     
     @level_group.command(name="重置", description="重置用戶等級（需要管理员权限）")
     @app_commands.checks.has_permissions(administrator=True)
@@ -235,13 +251,18 @@ class Leveling(commands.Cog):
                 await message.channel.send(embed=embed, delete_after=10)
             except:
                 pass
-    # 載入所有伺服器的數據
-        for guild in self.bot.guilds:
-            guild_id = str(guild.id)
-            self.levels[guild_id] = self.load_data(guild_id)
+            
+            # 觸發等級成就檢查
+            achievements_cog = self.bot.get_cog("Achievements")
+            if achievements_cog:
+                asyncio.create_task(achievements_cog.check_achievements(message.author, message.guild, "level", new_level))
         
     @commands.Cog.listener()
     async def on_ready(self):
+        # 載入所有伺服器的數據
+        for guild in self.bot.guilds:
+            guild_id = str(guild.id)
+            self.levels[guild_id] = self.load_data(guild_id)
         print(f'📦 {self.__class__.__name__} cog已載入')
         print(f'📊 已載入 {len(self.levels)} 個伺服器的等級数据')
 
