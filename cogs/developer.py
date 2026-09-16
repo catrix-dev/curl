@@ -181,7 +181,15 @@ class Developer(commands.Cog):
 
         embed.add_field(
             name="⚡ 當前模式",
-            value="🟢 **正常可用**（限制已解除，冷卻已清除，計數窗口已歸位）",
+            value="🟢 **正常可用**（當前限制時長已清空，冷卻已重置，滑動窗口已清空）",
+            inline=False
+        )
+
+        curr_lvl = detail.get("current_level", 0)
+        next_lvl = detail.get("next_level", 1)
+        embed.add_field(
+            name="📈 累計處罰等級（完整保留）",
+            value=f"目前累計等級：**第 {curr_lvl}/5 次**\n*(下次超速違規將計為 **第 {next_lvl} 次** 階梯處罰)*",
             inline=False
         )
 
@@ -198,7 +206,7 @@ class Developer(commands.Cog):
         )
 
         embed.set_footer(text=f"執行者: {executor_name} | 指令: !ai unban")
-        print(f"✅ 開發者 {executor_name} ({executor_id}) 解除了用戶 {target_uid} 的限制模式 (違規記錄: {detail.get('total_violations')} 次, 解除次數: {detail.get('unban_count')} 次)")
+        print(f"✅ 開發者 {executor_name} ({executor_id}) 解除了用戶 {target_uid} 的限制時長 (保留等級: 第 {curr_lvl} 次, 下次算第 {next_lvl} 次, 違規記錄: {detail.get('total_violations')} 次)")
         return embed
 
     @dev_group.command(name="執行", description="執行 Python 代碼")
