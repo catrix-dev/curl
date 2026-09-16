@@ -54,4 +54,7 @@ catbot_ref/
 scratch/
 .wrangler/
 images
+avatar*.png
+avatar*.jpg
+
 
