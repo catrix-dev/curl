@@ -86,33 +86,7 @@ class Games(commands.Cog):
         except Exception:
             pass
         
-        # 2. 添加經驗值（透過 Leveling Cog 記憶體更新）
-        try:
-            leveling_cog = self.bot.get_cog('Leveling')
-            if leveling_cog:
-                g_str = str(guild_id)
-                u_str = str(user_id)
-                u_data = leveling_cog.get_user_data(g_str, u_str)
-                xp_gain = 10 if won else 3
-                u_data['xp'] = u_data.get('xp', 0) + xp_gain
-                new_lvl = leveling_cog.calculate_level(u_data['xp'])
-                u_data['level'] = new_lvl
-                leveling_cog.save_data(g_str)
-            else:
-                levels_file = os.path.join('data', str(guild_id), 'levels.json')
-                if os.path.exists(levels_file):
-                    with open(levels_file, 'r', encoding='utf-8') as f:
-                        levels_data = json.load(f)
-                    user_id_str = str(user_id)
-                    if user_id_str in levels_data:
-                        xp = 10 if won else 3
-                        levels_data[user_id_str]['xp'] = levels_data[user_id_str].get('xp', 0) + xp
-                        with open(levels_file, 'w', encoding='utf-8') as f:
-                            json.dump(levels_data, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
-
-        # 3. 觸發成就檢查
+        # 2. 觸發成就檢查
         try:
             ach_cog = self.bot.get_cog('Achievements')
             if ach_cog:

@@ -4,6 +4,7 @@ from discord.ext import commands
 import os
 import sys
 import json
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -461,6 +462,47 @@ class Developer(commands.Cog):
             embed.set_footer(text=f"還有 {len(blocked) - 10} 名用戶未顯示")
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @dev_group.command(name="ai解封", description="解封因超快速刷屏浪費額度被限制的用戶")
+    @app_commands.describe(用戶="欲解封的用戶提及或用戶 ID")
+    async def ai_unban(self, interaction: discord.Interaction, 用戶: str):
+        """解封因超快速發送被 AI 頻率限制器懲罰的用戶（僅限開發者）"""
+        if not self.is_developer(interaction.user.id):
+            await interaction.response.send_message(
+                "❌ 此命令僅限開發者使用！", 
+                ephemeral=True
+            )
+            return
+
+        clean_id = re.sub(r"[<@!>]", "", 用戶).strip()
+        if not clean_id.isdigit():
+            await interaction.response.send_message(
+                "❌ 請輸入正確的用戶 ID 或 @提及 用戶！", 
+                ephemeral=True
+            )
+            return
+
+        target_uid = int(clean_id)
+        ai_cog = self.bot.get_cog('AIChat')
+        if not ai_cog or not hasattr(ai_cog, 'abuse_limiter'):
+            await interaction.response.send_message(
+                "❌ 無法連接到 AI 聊天模組或頻率限制器尚未初始化！", 
+                ephemeral=True
+            )
+            return
+
+        success = ai_cog.abuse_limiter.unban_user(target_uid)
+        if success:
+            await interaction.response.send_message(
+                f"✅ 已成功解封用戶 `<@{target_uid}>` (`{target_uid}`) 的 AI 頻率限制，違規等級已重置為 0！", 
+                ephemeral=True
+            )
+            print(f'✅ 開發者 {interaction.user.name} 解封了用戶 {target_uid} 的 AI 頻率限制')
+        else:
+            await interaction.response.send_message(
+                f"ℹ️ 用戶 `<@{target_uid}>` (`{target_uid}`) 未在違規名單中，已重置其快取。", 
+                ephemeral=True
+            )
     
     @commands.Cog.listener()
     async def on_ready(self):

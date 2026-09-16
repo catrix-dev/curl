@@ -44,43 +44,6 @@ class Achievements(commands.Cog):
                 'tier': 'epic'
             },
             
-            # 等級成就
-            'level_5': {
-                'name': '⭐ 新手',
-                'description': '達到 5 級',
-                'category': 'level',
-                'requirement': 5,
-                'tier': 'common'
-            },
-            'level_10': {
-                'name': '⭐ 進階',
-                'description': '達到 10 級',
-                'category': 'level',
-                'requirement': 10,
-                'tier': 'common'
-            },
-            'level_25': {
-                'name': '⭐ 專家',
-                'description': '達到 25 級',
-                'category': 'level',
-                'requirement': 25,
-                'tier': 'rare'
-            },
-            'level_50': {
-                'name': '⭐ 大師',
-                'description': '達到 50 級',
-                'category': 'level',
-                'requirement': 50,
-                'tier': 'epic'
-            },
-            'level_100': {
-                'name': '⭐ 傳奇',
-                'description': '達到 100 級',
-                'category': 'level',
-                'requirement': 100,
-                'tier': 'legendary'
-            },
-            
             # 遊戲成就
             'first_win': {
                 'name': '🎮 初次勝利',
@@ -262,15 +225,15 @@ class Achievements(commands.Cog):
         # 獲取用戶統計
         stats = {}
         
-        # 等級數據
-        levels_file = os.path.join(self.data_folder, str(guild_id), 'levels.json')
-        if os.path.exists(levels_file):
-            with open(levels_file, 'r', encoding='utf-8') as f:
-                levels_data = json.load(f)
-                user_key = str(user_id)
-                if user_key in levels_data:
-                    stats['level'] = levels_data[user_key].get('level', 0)
-                    stats['messages'] = levels_data[user_key].get('messages', 0)
+        # 訊息數據 (讀取 statistics.json)
+        stats_file = os.path.join(self.data_folder, str(guild_id), 'statistics.json')
+        if os.path.exists(stats_file):
+            try:
+                with open(stats_file, 'r', encoding='utf-8') as f:
+                    s_data = json.load(f)
+                    stats['messages'] = s_data.get('user_stats', {}).get(str(user_id), {}).get('messages', 0)
+            except Exception:
+                pass
         
         # 遊戲數據
         game_file = os.path.join(self.data_folder, str(guild_id), 'game_stats.json')
@@ -416,20 +379,20 @@ class Achievements(commands.Cog):
         
         # 獲取統計數據
         stats = {
-            'level': 0,
             'messages': 0,
             'game_wins': 0,
             'daily_streak': 0
         }
         
-        # 等級數據
-        levels_file = os.path.join(self.data_folder, str(guild_id), 'levels.json')
-        if os.path.exists(levels_file):
-            with open(levels_file, 'r', encoding='utf-8') as f:
-                levels_data = json.load(f)
-                if user_key in levels_data:
-                    stats['level'] = levels_data[user_key].get('level', 0)
-                    stats['messages'] = levels_data[user_key].get('messages', 0)
+        # 訊息數據 (讀取 statistics.json)
+        stats_file = os.path.join(self.data_folder, str(guild_id), 'statistics.json')
+        if os.path.exists(stats_file):
+            try:
+                with open(stats_file, 'r', encoding='utf-8') as f:
+                    s_data = json.load(f)
+                    stats['messages'] = s_data.get('user_stats', {}).get(user_key, {}).get('messages', 0)
+            except Exception:
+                pass
         
         # 遊戲數據
         game_file = os.path.join(self.data_folder, str(guild_id), 'game_stats.json')
@@ -452,12 +415,6 @@ class Achievements(commands.Cog):
             title="📊 成就進度",
             color=discord.Color.from_rgb(37, 99, 235),
             timestamp=datetime.utcnow()
-        )
-        
-        embed.add_field(
-            name="⭐ 等級",
-            value=f"當前等級：**{stats['level']}**",
-            inline=True
         )
         
         embed.add_field(

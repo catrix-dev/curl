@@ -51,10 +51,6 @@ class Profile(commands.Cog):
     def get_user_stats(self, guild_id: int, user_id: int) -> dict:
         """獲取用戶統計數據"""
         stats = {
-            'level': 0,
-            'xp': 0,
-            'rank': 0,
-            'total_xp': 0,
             'messages': 0,
             'game_wins': 0,
             'game_losses': 0,
@@ -62,35 +58,16 @@ class Profile(commands.Cog):
             'achievements': 0
         }
         
-        # 獲取等級數據
-        levels_file = os.path.join(self.data_folder, str(guild_id), 'levels.json')
-        if os.path.exists(levels_file):
-            with open(levels_file, 'r', encoding='utf-8') as f:
-                levels_data = json.load(f)
-                user_key = str(user_id)
-                if user_key in levels_data:
-                    u_data = levels_data[user_key]
-                    lvl = u_data.get('level', 1)
-                    tot_xp = u_data.get('total_xp', u_data.get('xp', 0))
-                    
-                    req_before = sum(100 + (l - 1) * 50 for l in range(1, lvl))
-                    xp_in_level = max(0, tot_xp - req_before)
-                    
-                    stats['level'] = lvl
-                    stats['xp'] = xp_in_level
-                    stats['total_xp'] = tot_xp
-                    stats['messages'] = u_data.get('messages', 0)
-                    
-                    # 計算排名
-                    sorted_users = sorted(
-                        levels_data.items(),
-                        key=lambda x: x[1].get('total_xp', x[1].get('xp', 0)),
-                        reverse=True
-                    )
-                    for idx, (uid, _) in enumerate(sorted_users, 1):
-                        if uid == user_key:
-                            stats['rank'] = idx
-                            break
+        # 獲取活躍統計數據 (讀取 statistics.json)
+        stats_file = os.path.join(self.data_folder, str(guild_id), 'statistics.json')
+        if os.path.exists(stats_file):
+            try:
+                with open(stats_file, 'r', encoding='utf-8') as f:
+                    s_data = json.load(f)
+                    user_key = str(user_id)
+                    stats['messages'] = s_data.get('user_stats', {}).get(user_key, {}).get('messages', 0)
+            except Exception:
+                pass
         
         # 獲取遊戲數據
         game_file = os.path.join(self.data_folder, str(guild_id), 'game_stats.json')
@@ -165,28 +142,11 @@ class Profile(commands.Cog):
                 inline=False
             )
         
-        # 等級信息
-        next_level_xp = 100 + (stats['level'] - 1) * 50
-        xp_progress = f"{stats['xp']}/{next_level_xp}"
-        progress_bar = self.create_progress_bar(stats['xp'], next_level_xp)
-        
-        embed.add_field(
-            name="⭐ 等級系統",
-            value=(
-                f"等級：**{stats['level']}**\n"
-                f"經驗：{xp_progress}\n"
-                f"{progress_bar}\n"
-                f"排名：**#{stats['rank']}**"
-            ),
-            inline=True
-        )
-        
         # 活躍統計
         embed.add_field(
             name="📊 活躍統計",
             value=(
                 f"訊息數：**{stats['messages']}**\n"
-                f"總經驗：**{stats['total_xp']}**\n"
                 f"連續簽到：**{stats['daily_streak']}** 天"
             ),
             inline=True

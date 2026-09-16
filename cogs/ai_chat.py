@@ -3323,6 +3323,174 @@ class ImageEditModal(discord.ui.Modal, title="🎨 參考圖片創作與修改 (
             await interaction.followup.send(f"⚠️ 改圖處理過程發生錯誤：`{e}`")
 
 
+class AIQuotaAbuseLimiter:
+    """
+    AI 頻率防刷屏與額度防浪費限制器（5 級階梯遞增懲罰）
+
+    規則：
+    - 檢測窗口：30 秒 (BURST_WINDOW = 30.0s)
+    - 懲罰階梯：
+      * 第 1 次超快速發送 > 5 個訊息：停止使用 30 秒
+      * 第 2 次超快速發送 > 3 個訊息：停止使用 2 分鐘 (120 秒)
+      * 第 3 次超快速發送 > 3 個訊息：停止使用 10 分鐘 (600 秒)
+      * 第 4 次超快速發送 > 3 個訊息：停止使用 1 小時 (3600 秒)
+      * 第 5 次超快速發送 > 3 個訊息：直接永久凍結（需官方開發者解封）
+    - 冷卻或凍結期間發送訊息：直接拒絕回答並提示剩餘時間，避免浪費額度。
+    """
+    BURST_WINDOW = 30.0
+
+    PENALTY_DURATIONS = {
+        1: 30,       # 30 秒
+        2: 120,      # 2 分鐘
+        3: 600,      # 10 分鐘
+        4: 3600,     # 1 小時
+        5: None      # 永久（需開發者解封）
+    }
+
+    def __init__(self, data_dir: str = "./data"):
+        self.data_dir = data_dir
+        self.filepath = os.path.join(data_dir, "global", "ai_rate_limits.json")
+        self.users: dict[str, dict] = {}
+        self.recent_timestamps: dict[str, list[float]] = {}
+        self.load_data()
+
+    def load_data(self):
+        os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+        if os.path.exists(self.filepath):
+            try:
+                with open(self.filepath, "r", encoding="utf-8") as f:
+                    self.users = json.load(f)
+            except Exception as e:
+                print(f"[AILimiter] 讀取限制資料失敗: {e}")
+                self.users = {}
+        else:
+            self.users = {}
+
+    def save_data(self):
+        try:
+            os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+            tmp = self.filepath + f".tmp_{os.getpid()}"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.users, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, self.filepath)
+        except Exception as e:
+            print(f"[AILimiter] 儲存限制資料失敗: {e}")
+
+    def check_request(self, user_id: int) -> tuple[bool, str]:
+        """檢查請求是否允許，若超速則觸發階梯懲罰；若處於冷卻期則直接拒絕"""
+        uid = str(user_id)
+        now = time.time()
+
+        user_info = self.users.get(uid, {
+            "penalty_level": 0,
+            "cooldown_until": 0,
+            "banned": False,
+            "total_violations": 0
+        })
+
+        # 1. 檢查是否已被永久凍結（第 5 次違規）
+        if user_info.get("banned") or user_info.get("penalty_level", 0) >= 5:
+            return False, (
+                "🚫 **【AI 對話權限已永久凍結】**\n"
+                "您因累計 **5 次超快速頻繁刷屏浪費額度**，AI 對話權限已被系統直接暫停！\n"
+                "⚠️ 此限制無法自動解除，必須由機器人官方開發者親自審核解封。"
+            )
+
+        # 2. 檢查是否處於臨時冷卻期間
+        cooldown_until = user_info.get("cooldown_until", 0)
+        if now < cooldown_until:
+            rem = int(cooldown_until - now) + 1
+            lvl = user_info.get("penalty_level", 1)
+            return False, (
+                f"🛑 **【防頻繁刷屏保護】**\n"
+                f"您目前處於冷卻限制中（第 **{lvl}** 次超速違規）！\n"
+                f"⏱️ 30 秒內過度發送訊息直接拒絕回答，避免浪費額度。\n"
+                f"請耐心等待 **{rem} 秒** 後再進行對話。"
+            )
+
+        # 3. 滑動時間窗口檢測 (30 秒)
+        ts_list = self.recent_timestamps.get(uid, [])
+        ts_list = [t for t in ts_list if now - t <= self.BURST_WINDOW]
+        ts_list.append(now)
+        self.recent_timestamps[uid] = ts_list
+
+        current_lvl = user_info.get("penalty_level", 0)
+        threshold = 5 if current_lvl == 0 else 3
+
+        if len(ts_list) > threshold:
+            # 觸發階梯懲罰！
+            new_lvl = min(current_lvl + 1, 5)
+            duration = self.PENALTY_DURATIONS.get(new_lvl)
+            user_info["penalty_level"] = new_lvl
+            user_info["total_violations"] = user_info.get("total_violations", 0) + 1
+            user_info["last_violation_at"] = datetime.now().isoformat()
+
+            # 清空滑動窗口，避免解除冷卻後立刻又被當前計數判定
+            self.recent_timestamps[uid] = []
+
+            if new_lvl >= 5:
+                user_info["banned"] = True
+                user_info["cooldown_until"] = 0
+                self.users[uid] = user_info
+                self.save_data()
+                return False, (
+                    "🚫 **【AI 對話權限已永久凍結】**\n"
+                    "您在短時間內超快速連續發送訊息（第 **5** 次違規），已達到系統最高防刷上限！\n"
+                    "AI 功能已直接暫停，必須聯繫官方開發者進行人工審核解封。"
+                )
+            else:
+                user_info["banned"] = False
+                user_info["cooldown_until"] = now + duration
+                self.users[uid] = user_info
+                self.save_data()
+
+                time_desc = {
+                    1: "30 秒",
+                    2: "2 分鐘",
+                    3: "10 分鐘",
+                    4: "1 小時"
+                }.get(new_lvl, f"{duration} 秒")
+
+                return False, (
+                    f"🛑 **【超快速發送警報・停止使用 {time_desc}】**\n"
+                    f"您在 30 秒內超快速連續發送超過 **{threshold}** 個訊息（判定為浪費額度）！\n"
+                    f"📌 本次為第 **{new_lvl}/5** 次違規，系統已暫時停止您使用 AI **{time_desc}**。\n"
+                    f"⚠️ 冷卻期間發送訊息將直接拒絕回答。若達第 5 次將被永久凍結！"
+                )
+
+        return True, ""
+
+    def unban_user(self, user_id: int) -> bool:
+        """開發者解封用戶，重置懲罰等級為 0"""
+        uid = str(user_id)
+        if uid in self.users:
+            self.users[uid] = {
+                "penalty_level": 0,
+                "cooldown_until": 0,
+                "banned": False,
+                "total_violations": 0,
+                "unbanned_at": datetime.now().isoformat()
+            }
+            self.recent_timestamps[uid] = []
+            self.save_data()
+            return True
+        self.recent_timestamps[uid] = []
+        return False
+
+    def get_user_status(self, user_id: int) -> dict:
+        """取得用戶的頻率限制狀態"""
+        uid = str(user_id)
+        now = time.time()
+        info = self.users.get(uid, {"penalty_level": 0, "cooldown_until": 0, "banned": False, "total_violations": 0})
+        cooldown_rem = max(0, int(info.get("cooldown_until", 0) - now))
+        return {
+            "penalty_level": info.get("penalty_level", 0),
+            "banned": info.get("banned", False),
+            "cooldown_remaining": cooldown_rem,
+            "total_violations": info.get("total_violations", 0)
+        }
+
+
 class AIChat(commands.Cog):
     """AI 聊天功能模組 (支援 OpenRouter [OpenAI / Qwen / Grok]、DeepSeek [V3 / R1]、多重人設切換與瀏覽器代理人)"""
 
@@ -3339,6 +3507,7 @@ class AIChat(commands.Cog):
         os.makedirs(self.data_dir, exist_ok=True)
         self.persona_prompt_manager = PersonaPromptManager(self.data_dir)
         self.persona_prompt_manager.preload_all()
+        self.abuse_limiter = AIQuotaAbuseLimiter(self.data_dir)
 
         # 註冊右鍵訊息選單：參考此圖生成/改圖 (支援伺服器安裝與使用者個人安裝)
         self.ctx_image_edit = app_commands.ContextMenu(
@@ -3991,11 +4160,16 @@ class AIChat(commands.Cog):
             if not config.get("enabled", True):
                 return False, "⚠️ 本伺服器目前尚未開啟 AI 聊天功能。管理員可透過 `/ai 管理 開啟` 或 Web 控制台進行設定。"
 
-        # 開發者特權：完全豁免每日訊息額度限制與黑名單限制
+        # 開發者特權：完全豁免每日訊息額度限制、黑名單限制與頻率防刷限制
         if self.is_developer(member.id):
             return True, ""
 
-        # 2. 檢查用戶是否在伺服器黑名單內
+        # 2. 頻率防刷屏與額度防浪費檢測 (超快速發送階梯處罰，冷卻中直接拒絕回答)
+        allowed, abuse_msg = self.abuse_limiter.check_request(member.id)
+        if not allowed:
+            return False, abuse_msg
+
+        # 3. 檢查用戶是否在伺服器黑名單內
         user_id_str = str(member.id)
         banned_users = config.get("banned_users", {})
         if user_id_str in banned_users or member.id in banned_users:
@@ -6935,6 +7109,54 @@ class AIChat(commands.Cog):
     async def ai_ban_list_shortcut(self, interaction: discord.Interaction):
         """查看 AI 聊天封禁名單捷徑"""
         await self.admin_ban_list.callback(self, interaction)
+
+    @ai_group.command(name="頻率狀態", description="查看自己或指定成員的 AI 頻率冷卻與超速違規狀態")
+    @app_commands.describe(成員="選填：欲查詢的成員 (若未填寫則查看自己)")
+    async def ai_rate_limit_status(self, interaction: discord.Interaction, 成員: Optional[discord.Member] = None):
+        target = 成員 or interaction.user
+        status = self.abuse_limiter.get_user_status(target.id)
+
+        lvl = status["penalty_level"]
+        banned = status["banned"]
+        cooldown_rem = status["cooldown_remaining"]
+        total_v = status["total_violations"]
+
+        embed = discord.Embed(
+            title=f"⚡ AI 頻率限制狀態 — {target.display_name}",
+            color=discord.Color.red() if banned else (discord.Color.orange() if cooldown_rem > 0 else discord.Color.green())
+        )
+        embed.set_thumbnail(url=target.display_avatar.url)
+
+        status_text = "🟢 正常無限制"
+        if banned:
+            status_text = "🔴 永久凍結（需官方開發者解封）"
+        elif cooldown_rem > 0:
+            status_text = f"⏳ 冷卻限制中（剩餘 {cooldown_rem} 秒）"
+
+        embed.add_field(name="當前狀態", value=status_text, inline=True)
+        embed.add_field(name="違規等級", value=f"{lvl} / 5 級", inline=True)
+        embed.add_field(name="累計違規次數", value=f"{total_v} 次", inline=True)
+        embed.set_footer(text="curl 頻率防刷防浪費安全防護系統")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @ai_admin_group.command(name="解封頻率", description="[官方開發者專用] 解封因超快速刷屏浪費額度被限制的用戶")
+    @app_commands.describe(用戶="欲解封的用戶提及或用戶 ID")
+    async def admin_unban_rate_limit(self, interaction: discord.Interaction, 用戶: str):
+        if not self.is_developer(interaction.user.id):
+            await interaction.response.send_message("❌ 只有機器人官方開發者可以使用此指令！", ephemeral=True)
+            return
+
+        clean_id = re.sub(r"[<@!>]", "", 用戶).strip()
+        if not clean_id.isdigit():
+            await interaction.response.send_message("❌ 請輸入正確的用戶 ID 或 @提及 用戶！", ephemeral=True)
+            return
+
+        target_uid = int(clean_id)
+        success = self.abuse_limiter.unban_user(target_uid)
+        if success:
+            await interaction.response.send_message(f"✅ 已成功解封用戶 `<@{target_uid}>` (`{target_uid}`) 的 AI 頻率限制，違規等級已歸零！")
+        else:
+            await interaction.response.send_message(f"ℹ️ 用戶 `<@{target_uid}>` 未處於違規紀錄中，已清除其潛在快取。", ephemeral=True)
 
     @ai_admin_group.command(name="伺服器上限", description="設定本伺服器每日 AI 訊息總上限（介於 200 到 2000 條）")
     @app_commands.describe(每日上限="每日全服可用總次數 (200-3000，預設 1500)")

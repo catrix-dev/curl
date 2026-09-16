@@ -258,7 +258,7 @@ class Giveaway(commands.Cog):
         return data.get("today_messages", {}).get(str(user_id), 0)
 
     def get_user_total_messages(self, guild_id: int, user_id: int) -> int:
-        """獲取用戶在該伺服器的累積總發言數 (整合 statistics.json / levels.json)"""
+        """獲取用戶在該伺服器的累積總發言數 (整合 statistics.json 與 giveaway 統計)"""
         counts = []
         uid_str = str(user_id)
 
@@ -266,17 +266,7 @@ class Giveaway(commands.Cog):
         data = self.load_user_stats(guild_id)
         counts.append(data.get("total_messages", {}).get(uid_str, 0))
 
-        # 2. levels.json
-        levels_path = os.path.join(self.data_dir, str(guild_id), "levels.json")
-        if os.path.exists(levels_path):
-            try:
-                with open(levels_path, "r", encoding="utf-8") as f:
-                    levels_data = json.load(f)
-                counts.append(levels_data.get(uid_str, {}).get("messages", 0))
-            except Exception:
-                pass
-
-        # 3. statistics.json
+        # 2. statistics.json
         stats_path = os.path.join(self.data_dir, str(guild_id), "statistics.json")
         if os.path.exists(stats_path):
             try:
@@ -287,18 +277,6 @@ class Giveaway(commands.Cog):
                 pass
 
         return max(counts) if counts else 0
-
-    def get_user_level(self, guild_id: int, user_id: int) -> int:
-        """獲取用戶在該伺服器的等級 (讀取 levels.json)"""
-        levels_path = os.path.join(self.data_dir, str(guild_id), "levels.json")
-        if os.path.exists(levels_path):
-            try:
-                with open(levels_path, "r", encoding="utf-8") as f:
-                    levels_data = json.load(f)
-                return levels_data.get(str(user_id), {}).get("level", 0)
-            except Exception:
-                pass
-        return 0
 
     def check_user_eligibility(self, guild: discord.Guild, member: discord.Member, gw: dict) -> Tuple[bool, str]:
         """檢查成員是否符合該抽獎的所有門檻條件"""
@@ -311,14 +289,7 @@ class Giveaway(commands.Cog):
             if role and role not in member.roles:
                 failed_reasons.append(f"• 身分組門檻：需持有 {role.mention}")
 
-        # 2. 最低等級檢查
-        min_level = gw.get("min_level")
-        if min_level and min_level > 0:
-            user_level = self.get_user_level(guild.id, member.id)
-            if user_level < min_level:
-                failed_reasons.append(f"• 等級門檻：需達到 **Lv.{min_level}** (您目前為 Lv.{user_level})")
-
-        # 3. 今日發言數檢查
+        # 2. 今日發言數檢查
         req_today_msgs = gw.get("req_today_msgs")
         if req_today_msgs and req_today_msgs > 0:
             user_today_msgs = self.get_user_today_messages(guild.id, member.id)
@@ -402,15 +373,12 @@ class Giveaway(commands.Cog):
 
         # 資格限制彙整展示
         req_role_id = gw.get("required_role_id")
-        min_level = gw.get("min_level")
         req_today_msgs = gw.get("req_today_msgs")
         req_total_msgs = gw.get("req_total_msgs")
 
         requirements = []
         if req_role_id:
             requirements.append(f"持有身分組：<@&{req_role_id}>")
-        if min_level and min_level > 0:
-            requirements.append(f"最低等級要求：**Lv.{min_level}** 以上")
         if req_today_msgs and req_today_msgs > 0:
             requirements.append(f"今日發言要求：至少 **{req_today_msgs}** 句")
         if req_total_msgs and req_total_msgs > 0:
@@ -547,14 +515,13 @@ class Giveaway(commands.Cog):
         description="🎁 伺服器福利與抽獎活動系統"
     )
 
-    @giveaway_group.command(name="發起", description="發起一場新的抽獎活動 (支援身分組、等級、今日發言等門檻)")
+    @giveaway_group.command(name="發起", description="發起一場新的抽獎活動 (支援身分組、今日發言等門檻)")
     @app_commands.describe(
         獎品="抽獎獎品名稱 (例如: Discord Nitro 1個月、1000 遊戲金幣)",
         時長="抽獎持續時間 (例如: 30s, 10m, 2h, 1d, 1w)",
         獲獎人數="預計抽出之中獎名額 (預設 1 人)",
         頻道="發布抽獎的頻道 (預設為當前頻道)",
         資格身分組="限制必須持有該身分組方可參加 (選填)",
-        最低等級="限制需達到之等級門檻 (選填，如: 5 代表 Lv.5 以上)",
         今日發言要求="限制今天在伺服器發言需達指定次數 (選填，如: 3 代表需講超過3句話)",
         歷史發言要求="限制伺服器累積總發言數需達指定次數 (選填)",
         說明="補充抽獎規則、贊助者或額外備註說明 (選填)"
@@ -568,7 +535,6 @@ class Giveaway(commands.Cog):
         獲獎人數: Optional[app_commands.Range[int, 1, 20]] = 1,
         頻道: Optional[discord.TextChannel] = None,
         資格身分組: Optional[discord.Role] = None,
-        最低等級: Optional[app_commands.Range[int, 1, 100]] = None,
         今日發言要求: Optional[app_commands.Range[int, 1, 1000]] = None,
         歷史發言要求: Optional[app_commands.Range[int, 1, 100000]] = None,
         說明: Optional[str] = None
@@ -597,7 +563,6 @@ class Giveaway(commands.Cog):
             "start_timestamp": now_dt.timestamp(),
             "end_timestamp": end_timestamp,
             "required_role_id": 資格身分組.id if 資格身分組 else None,
-            "min_level": 最低等級,
             "req_today_msgs": 今日發言要求,
             "req_total_msgs": 歷史發言要求,
             "description": 說明.strip() if 說明 else "",

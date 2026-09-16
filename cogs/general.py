@@ -47,12 +47,6 @@ class HelpSelect(ui.Select):
                 value="utility"
             ),
             discord.SelectOption(
-                label="等級系統",
-                description="查看等級系統指令",
-                emoji="⭐",
-                value="leveling"
-            ),
-            discord.SelectOption(
                 label="歡迎系統",
                 description="查看歡迎系統指令",
                 emoji="👋",
@@ -151,7 +145,6 @@ class HelpSelect(ui.Select):
                 "🎮 娛樂指令\n"
                 "🏰 伺服器指令\n"
                 "🔧 工具指令\n"
-                "⭐ 等級系統\n"
                 "👋 歡迎系統\n"
                 "👆 反應角色\n"
                 "📅 簽到系統\n"
@@ -253,24 +246,6 @@ class HelpSelect(ui.Select):
                     "`/工具 二維碼` - 生成QR碼\n"
                     "`/工具 天氣` - 查看天氣資訊"
                 ),
-                inline=False
-            )
-            
-        elif self.values[0] == "leveling":
-            embed.title = "⭐ 等級系統"
-            embed.description = "用戶等級與經驗系統"
-            embed.add_field(
-                name="指令列表",
-                value=(
-                    "`/等級 查看` - 查看自己或其他用戶的等級\n"
-                    "`/等級 排行榜` - 查看等級排行榜\n"
-                    "`/等級 重置` - 重置用戶等級 (需要管理權限)"
-                ),
-                inline=False
-            )
-            embed.add_field(
-                name="📊 如何獲得經驗",
-                value="發送消息自動獲得 15-25 經驗（60秒冷卻）",
                 inline=False
             )
             
@@ -475,7 +450,6 @@ class HelpSelect(ui.Select):
             embed.add_field(
                 name="卡片內容",
                 value=(
-                    "• 等級和經驗值\n"
                     "• 活躍統計（訊息數、簽到）\n"
                     "• 遊戲統計和勝率\n"
                     "• 已解鎖成就數量\n"
@@ -510,7 +484,6 @@ class HelpSelect(ui.Select):
                 name="成就分類",
                 value=(
                     "📝 訊息成就\n"
-                    "⭐ 等級成就\n"
                     "🎮 遊戲成就\n"
                     "📅 簽到成就\n"
                     "🌟 特殊成就"
@@ -584,7 +557,7 @@ class HelpSelect(ui.Select):
             embed.add_field(
                 name="抽獎指令清單 (管理權限)",
                 value=(
-                    "`/抽獎 發起` - 發起新抽獎 (可設定獎品、時長、名額、門檻身分組/等級/今日發言數與說明)\n"
+                    "`/抽獎 發起` - 發起新抽獎 (可設定獎品、時長、名額、門檻身分組/發言數與說明)\n"
                     "`/抽獎 結束` - 提前手動結束指定抽獎並立即抽出得主\n"
                     "`/抽獎 重抽` - 為已結束的抽獎重新抽選 1 位或多位新得獎者\n"
                     "`/抽獎 取消` - 取消進行中的抽獎活動 (不開獎)\n"
@@ -596,7 +569,6 @@ class HelpSelect(ui.Select):
                 name="多樣化參加門檻 (發起時選填)",
                 value=(
                     "• **資格身分組**：限定持有特定身分組之成員才能參加\n"
-                    "• **最低等級**：需達到指定等級門檻 (例如: Lv.5)\n"
                     "• **今日發言要求**：當天在伺服器發言需達指定句數 (例如: 3 句)\n"
                     "• **歷史發言要求**：累積總發言需達到指定句數"
                 ),
@@ -747,7 +719,6 @@ class General(commands.Cog):
                 "🎮 娛樂指令\n"
                 "🏰 伺服器指令\n"
                 "🔧 工具指令\n"
-                "⭐ 等級系統\n"
                 "👋 歡迎系統\n"
                 "👆 反應角色\n"
                 "📅 簽到系統\n"
@@ -802,7 +773,7 @@ class General(commands.Cog):
                 "建議使用斜線指令 `/help` 獲得最佳體驗！\n\n"
                 "**可用分類：**\n"
                 "📌 一般指令 • 🛡️ 管理指令 • 🎮 娛樂指令\n"
-                "🏰 伺服器指令 • 🔧 工具指令 • ⭐ 等級系統\n"
+                "🏰 伺服器指令 • 🔧 工具指令 • 🤖 AI 聊天\n"
                 "👋 歡迎系統 • 👆 反應角色 • 📅 簽到系統\n"
                 "🎂 生日系統 • 🎯 遊戲系統 • 📊 統計分析\n"
                 "📝 自定義命令 • 🎤 臨時語音 • 📋 個人資料"
