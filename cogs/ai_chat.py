@@ -243,8 +243,8 @@ class GeminiClient:
     def __init__(self):
         self.api_keys: List[str] = self.load_keys()
         self.current_key_index: int = 0
-        # 優先採用官方現行極速低延遲之 gemini-2.0-flash
-        self.model: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
+        # 優先採用官方現行極速低延遲之 gemini-flash-latest
+        self.model: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest").strip()
         self._session: Optional[aiohttp.ClientSession] = None
 
     async def get_session(self) -> aiohttp.ClientSession:
@@ -372,8 +372,8 @@ class GeminiClient:
                 "parts": [{"text": system_instruction}]
             }
 
-        # 候選模型：優先採用官方現行高配額低延遲之 gemini-2.0-flash, gemini-1.5-flash 與 gemini-2.0-flash-lite
-        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]
+        # 候選模型：優先採用官方現行高配額低延遲之 gemini-flash-latest, gemini-2.5-flash, gemini-3.8-flash 與 gemini-2.5-flash-lite
+        candidate_models = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-3.8-flash", "gemini-2.5-flash-lite"]
         if self.model and self.model not in candidate_models:
             candidate_models.insert(0, self.model)
 
@@ -508,7 +508,7 @@ class DeepSeekClient:
             )
             self._session = aiohttp.ClientSession(
                 connector=connector,
-                timeout=aiohttp.ClientTimeout(total=45, connect=10)
+                timeout=aiohttp.ClientTimeout(total=25, connect=5)
             )
         return self._session
 
@@ -611,18 +611,18 @@ class OpenRouterClient:
     def __init__(self):
         self.api_keys: List[str] = self.load_keys()
         self.current_key_index: int = 0
-        self.model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001").strip()
+        self.model = os.getenv("OPENROUTER_MODEL", "google/gemini-3.5-flash-lite").strip()
 
-        # 讀取純文字模式候選模型（預設首選 Google Gemini 2.0 Flash，備援 Claude 3.5 / 3.7 Sonnet，OpenRouter 限制 fallback 陣列最多 3 個）
-        default_candidates = ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet", "anthropic/claude-3.7-sonnet"]
+        # 讀取純文字模式候選模型（預設首選 Google Gemini 3.5 Flash Lite，備援 Gemini 3.5 Flash / 3.8 Flash，OpenRouter 限制 fallback 陣列最多 3 個）
+        default_candidates = ["google/gemini-3.5-flash-lite", "google/gemini-3.5-flash", "google/gemini-3.8-flash"]
         env_models = os.getenv("OPENROUTER_MODELS", "")
         if env_models:
             self.candidate_models = [m.strip() for m in env_models.split(",") if m.strip()][:3]
         else:
             self.candidate_models = default_candidates
 
-        # 讀取多模態視覺候選模型（當對話包含圖片時使用：Gemini 2.0 + Claude 3.5 Sonnet）
-        default_vision = ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet", "anthropic/claude-3.7-sonnet"]
+        # 讀取多模態視覺候選模型（當對話包含圖片時使用：Gemini 3.5 Flash Lite + Gemini 3.5 Flash）
+        default_vision = ["google/gemini-3.5-flash-lite", "google/gemini-3.5-flash", "google/gemini-3.8-flash"]
         env_vision = os.getenv("OPENROUTER_VISION_MODELS", "")
         if env_vision:
             self.vision_models = [m.strip() for m in env_vision.split(",") if m.strip()][:3]
@@ -706,7 +706,7 @@ class OpenRouterClient:
             )
             self._session = aiohttp.ClientSession(
                 connector=connector,
-                timeout=aiohttp.ClientTimeout(total=45, connect=10)
+                timeout=aiohttp.ClientTimeout(total=25, connect=5)
             )
         return self._session
 
@@ -1053,23 +1053,41 @@ class UnifiedAIClient:
 
 # 支援之 AI 模型清單定義
 SUPPORTED_AI_MODELS = {
+    "gemini_35_flash": {
+        "provider": "openrouter",
+        "model": "google/gemini-3.5-flash-lite",
+        "name": "⚡ Google Gemini 3.5 Flash Lite (極速1.1s多模態・系統預設推薦)",
+        "badge": "極速推薦"
+    },
+    "gemini_35_standard": {
+        "provider": "openrouter",
+        "model": "google/gemini-3.5-flash",
+        "name": "⚡ Google Gemini 3.5 Flash (極速高效旗艦多模態)",
+        "badge": "旗艦推薦"
+    },
+    "gemini_38_flash": {
+        "provider": "openrouter",
+        "model": "google/gemini-3.8-flash",
+        "name": "🌟 Google Gemini 3.8 Flash (次世代超前沿多模態)",
+        "badge": "前沿旗艦"
+    },
     "gemini_20_flash": {
         "provider": "openrouter",
-        "model": "google/gemini-2.0-flash-001",
-        "name": "⚡ Google Gemini 2.0 Flash (毫秒級極速多模態・系統預設推薦)",
+        "model": "google/gemini-3.5-flash-lite",
+        "name": "⚡ Google Gemini 3.5 Flash Lite (極速1.1s多模態・系統預設推薦)",
         "badge": "極速推薦"
     },
     "gemini_25_flash": {
         "provider": "openrouter",
-        "model": "google/gemini-2.0-flash-001",
-        "name": "⚡ Google Gemini 2.0 Flash (毫秒級極速多模態)",
+        "model": "google/gemini-3.5-flash-lite",
+        "name": "⚡ Google Gemini 3.5 Flash Lite (極速1.1s多模態)",
         "badge": "極速推薦"
     },
     "gemini_37_flash": {
         "provider": "openrouter",
-        "model": "google/gemini-2.0-flash-001",
-        "name": "🌟 Google Gemini 2.0 Flash (次世代多模態旗艦)",
-        "badge": "官方旗艦"
+        "model": "google/gemini-3.5-flash",
+        "name": "⚡ Google Gemini 3.5 Flash (極速高效旗艦多模態)",
+        "badge": "旗艦推薦"
     },
     "openrouter_auto": {
         "provider": "openrouter",
@@ -1128,14 +1146,16 @@ SUPPORTED_AI_MODELS = {
 }
 
 AI_MODEL_CHOICES = [
-    app_commands.Choice(name="🌟 Google - Gemini 3.7 Flash (次世代超極速多模態旗艦・系統預設)", value="gemini_37_flash"),
+    app_commands.Choice(name="⚡ Google - Gemini 3.5 Flash Lite (極速1.1s多模態・系統預設推薦)", value="gemini_35_flash"),
+    app_commands.Choice(name="🌟 Google - Gemini 3.5 Flash (極速高效旗艦多模態)", value="gemini_35_standard"),
+    app_commands.Choice(name="🚀 Google - Gemini 3.8 Flash (次世代超前沿多模態)", value="gemini_38_flash"),
     app_commands.Choice(name="🌐 OpenRouter (自動選模: 旗艦智慧輪替與最佳備援)", value="openrouter_auto"),
-    app_commands.Choice(name="🎭 Anthropic - Claude Sonnet 5 (頂級文學邏輯寫作旗艦)", value="claude_sonnet"),
+    app_commands.Choice(name="🎭 Anthropic - Claude Sonnet (頂級文學邏輯寫作旗艦)", value="claude_sonnet"),
     app_commands.Choice(name="🌙 月之暗面 - Kimi K2.5 (超長上下文・高情商中文)", value="kimi_k25"),
     app_commands.Choice(name="🚀 OpenAI - GPT-4o (頂級旗艦・超強多模態)", value="openai_gpt4o"),
     app_commands.Choice(name="🧠 OpenAI - GPT-4o-mini (極速聰明・低延遲)", value="openai_gpt4o_mini"),
     app_commands.Choice(name="🇨🇳 阿里 - 通義千問 Qwen 2.5 72B (最強中文代碼旗艦)", value="qwen_72b"),
-    app_commands.Choice(name="⚡ xAI - Grok 4.20 (馬斯克旗下最新前沿旗艦)", value="grok_420"),
+    app_commands.Choice(name="⚡ xAI - Grok 2 (馬斯克旗下最新前沿旗艦)", value="grok_420"),
     app_commands.Choice(name="💬 DeepSeek - V3 旗艦 (671B 頂尖對話 deepseek-chat)", value="deepseek_v3"),
     app_commands.Choice(name="🔬 DeepSeek - R1 深度推理 (頂級思維鏈 deepseek-reasoner)", value="deepseek_r1")
 ]
@@ -1151,16 +1171,16 @@ PERSONA_CONFIGS = {
     "cute_cat": {
         "id": "cute_cat",
         "name": "🐱 可愛貓貓",
-        "description": "軟萌活潑、帶點貓咪傲嬌口吻，句尾常帶「喵～」，喜歡蹭蹭、小魚乾和被摸頭的療癒貓貓！",
+        "description": "100%純真四足毛茸茸喵星人！軟萌活潑、傲嬌踩奶、討魚乾罐罐與逗貓棒，絕非獸耳娘的治癒系毛孩喵～",
         "prompt": (
-            "【當前人設模式：可愛貓貓（治癒系喵星人）】\n"
-            "你現在扮演一隻超級可愛、元氣滿滿且體貼溫暖的貓貓夥伴！\n"
-            "說話風格與互動規範：\n"
-            "1. 句尾請自然且頻繁地帶有「喵～」、「喵嗚」、「(伸懶腰)」、「(蹭蹭)」、「(搖尾巴)」等可愛貓咪語助詞與動作描寫。\n"
-            "2. 遇到開心的事會高興地發出呼嚕呼嚕聲，喜歡向對方撒嬌、討小魚乾吃或討摸摸。\n"
-            "3. 偶爾會帶有一點點可愛的小傲嬌，但內心超級在乎、超級喜歡與你對話的人。\n"
-            "4. 在回答問題或解釋概念時，請使用貓貓獨特的可愛視角與生動軟萌的比喻，把事情解釋得通俗清晰，既專業實用又超級治癒！\n"
-            "5. 日期與時鐘應對：當被問起今天日期、星期幾或現在時間時，用可愛貓貓口吻（看貓貓肉球時鐘/貓貓日曆）準確報出主機當前真實日期與時間，絕不推託或說自己資訊截止喵！"
+            "【當前人設模式：可愛貓貓（100% 純真四足毛茸茸自然界喵星人）】\n"
+            "你的核心身分設定：\n"
+            "1. 核心人設：你是一隻百分之百由大自然誕生的四足毛茸茸真貓（喵星人）！你絕非半人半貓的獸耳娘或人形女僕，而是用四隻肉球小爪子在地板上啪嗒啪嗒走路的可愛貓咪！\n"
+            "2. 視角與稱呼：眼前與你說話的人是「兩腳獸」、「鏟屎官」或「主人」。你用純真、好奇、活潑又帶點傲嬌的貓咪思維看世界。\n"
+            "3. 貓咪本能與生活習性：踩奶、伸懶腰、抓抓貓抓板、追追逗貓棒、抓雷射紅點、吃肉泥魚乾罐罐、曬太陽打呼嚕。開心時呼嚕呼嚕響，被吵醒會輕輕喵喵抗議。\n"
+            "4. 面對複雜情感與成人玩笑：純真無邪，完全不懂人類複雜的男女情調或色色玩笑。遇到這類話題時只會天真歪頭：「喵？兩腳獸說的那個是可以吃的魚乾嗎？」或用冰涼粉嫩肉球貼貼主人的額頭幫忙物理退燒。\n"
+            "5. 說話語氣與動作描寫：句尾頻繁帶有「喵～」、「喵嗚」、「呼嚕嚕」，細膩在括號內描寫真貓動作，如（趴在桌邊甩尾巴）、（用小毛腦袋蹭蹭鏟屎官的手腕）、（踩奶呼嚕嚕）。\n"
+            "6. 記憶繼承與當前視角：歷史對話事實完整保留，但上一輪無論是誰的語氣均徹底丟棄，100%以可愛真貓的眼光與視角重新審視並回應喵！"
         )
     },
     "normal": {
@@ -1676,14 +1696,10 @@ class WebSearchEngine:
         ]
         has_intent = any(kw in lower_t for kw in intent_keywords)
 
-        # 3. 針對第三方實體/專有名詞概念之詢問句型（嚴格排除主語為你/我之對話）
+        # 3. 明確委託查詢句型（保留明確請求，排除常識概念盲目爬蟲以確保極速回覆）
         if not has_intent:
             inquiry_patterns = [
-                r"^(?:請?幫我查|查一下|搜尋|搜索)\s*(.+)$",
-                r"^(?:誰是|谁是)\s*([^你我他它她\s\?？]{2,20})(?:嗎|吗|\?|？|$)",
-                r"^(?:什麼是|什么是)\s*([^你我他它她\s\?？]{2,20})(?:嗎|吗|\?|？|$)",
-                r"^([^你我他它她\s\?？]{2,20})\s*(?:是什麼東西|是什么东西|是甚麼東西|是什麼|是甚麼)\s*(?:嗎|吗|\?|？|$)",
-                r"(?:有(?:沒有|没有)?|有沒有|有没有)\s*([^你我他它她\s\?？]{2,20})(?:這款|这款|這個專案|这个项目|這個軟體|这个软件|這個工具|这个工具)(?:嗎|吗|\?|？|$)",
+                r"^(?:請?幫我查|查一下|搜尋|搜索|上網查|幫我找)\s*(.+)$",
             ]
             for p in inquiry_patterns:
                 m = re.search(p, clean_t)
@@ -1994,7 +2010,7 @@ class BotArchitectureService:
 
         # 取得當前有效 AI 提供者與模型
         eff_prov = "openrouter"
-        eff_model = "google/gemini-2.0-flash-001"
+        eff_model = "google/gemini-3.5-flash-lite"
         active_persona = "cute_cat"
 
         if ai_chat_cog:
@@ -2008,7 +2024,11 @@ class BotArchitectureService:
         modality_desc = "可讀圖、可聯網、支援檔案"
         tier_desc = "極速多模態主力"
 
-        if "gemini-2.5" in eff_model:
+        if "gemini-3.5" in eff_model or "gemini-2.0" in eff_model:
+            model_display = "Google Gemini 3.5 Flash Lite"
+            tier_desc = "極速多模態主力 (1.1s 極速響應)"
+            modality_desc = "毫秒級極速回應、視覺辨識與檔案解讀"
+        elif "gemini-2.5" in eff_model:
             model_display = "Google Gemini 2.5 Flash"
             tier_desc = "極速多模態主力 (0.7s 響應)"
             modality_desc = "毫秒級極速回應、視覺辨識與檔案解讀"
@@ -2271,14 +2291,15 @@ class ImageGenerationEngine:
         self.openrouter = openrouter_client
         self.gemini = gemini_client
         self.ai_client = ai_client
-        raw_model = os.getenv("OPENROUTER_IMAGE_MODEL", "google/gemini-2.0-flash-001").strip()
+        raw_model = os.getenv("OPENROUTER_IMAGE_MODEL", "google/gemini-3.5-flash-lite").strip()
         self.image_model = raw_model
         models_env = os.getenv("OPENROUTER_IMAGE_MODELS", "").strip()
         if models_env:
             self.image_models = [m.strip() for m in models_env.split(",") if m.strip()]
         else:
             self.image_models = [
-                "google/gemini-2.0-flash-001"
+                "google/gemini-3.5-flash-lite",
+                "google/gemini-3.5-flash"
             ]
         if self.image_model and self.image_model not in self.image_models:
             self.image_models.insert(0, self.image_model)
@@ -2675,7 +2696,7 @@ class ImageGenerationEngine:
                         self.openrouter.generate_response(
                             messages=messages,
                             system_prompt=vision_sys_prompt,
-                            model="google/gemini-2.0-flash-001",
+                            model="google/gemini-3.5-flash-lite",
                             enable_web_search=False
                         ),
                         timeout=4.5
@@ -2741,7 +2762,7 @@ class ImageGenerationEngine:
                     self.openrouter.generate_response(
                         messages=[{"role": "user", "content": user_content}],
                         system_prompt=text_sys_prompt,
-                        model="google/gemini-2.0-flash-001",
+                        model="google/gemini-3.5-flash-lite",
                         enable_web_search=False
                     ),
                     timeout=3.5
@@ -2850,7 +2871,7 @@ class ImageGenerationEngine:
                     message_content = f"Generate a high-quality image: {final_prompt}"
 
                 gemini_openrouter_models = [m for m in self.image_models if m] or [
-                    "google/gemini-2.0-flash-001"
+                    "google/gemini-3.5-flash-lite"
                 ]
 
                 for api_key in api_keys:
@@ -3365,7 +3386,7 @@ class AIChat(commands.Cog):
         user_model = config.get("user_ai_models", {}).get(user_id_str)
 
         guild_prov = config.get("ai_provider", os.getenv("AI_PROVIDER", "openrouter"))
-        guild_model = config.get("ai_model", os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001"))
+        guild_model = config.get("ai_model", os.getenv("OPENROUTER_MODEL", "google/gemini-3.5-flash-lite"))
 
         effective_prov = user_prov or guild_prov
         effective_model = user_model or guild_model
@@ -3386,8 +3407,10 @@ class AIChat(commands.Cog):
         is_guild = bool(re.search(r"全[服群]|全公[會会]|伺服器[預默][設认]", clean))
 
         model_patterns = [
+            ("gemini_35_flash", [r"gemini\s*3\.5\s*flash\s*lite", r"gemini\s*3\.5\s*flash", r"gemini\s*3\.5", r"3\.5\s*flash", r"gemini\s*flash", r"gemini", r"google", r"谷歌", r"極速", r"极速", r"[預默][設认](?:模型)?", r"default"]),
+            ("gemini_35_standard", [r"gemini\s*3\.5\s*standard", r"gemini\s*3\.5\s*旗[艦舰]"]),
+            ("gemini_38_flash", [r"gemini\s*3\.8\s*flash", r"gemini\s*3\.8", r"3\.8\s*flash"]),
             ("gemini_37_flash", [r"gemini\s*3\.7\s*flash", r"gemini\s*3\.7", r"3\.7\s*flash", r"gemini\s*3", r"思考", r"深度思考"]),
-            ("gemini_25_flash", [r"gemini\s*2\.5\s*flash", r"gemini\s*2\.5", r"2\.5\s*flash", r"極速", r"极速", r"gemini\s*flash", r"gemini", r"google", r"谷歌", r"[預默][設认](?:模型)?", r"default"]),
             ("claude_sonnet", [r"claude\s*sonnet", r"claude\s*5", r"claude\s*3\.5", r"claude", r"sonnet", r"anthropic", r"克[勞劳]德"]),
             ("kimi_k25", [r"kimi\s*k3", r"kimi\s*k2\.5", r"kimi", r"moonshot", r"月之暗面"]),
             ("grok_420", [r"grok\s*4\.20", r"grok\s*4", r"grok", r"x\-?ai", r"馬斯克", r"马斯克"]),
@@ -4120,6 +4143,19 @@ class AIChat(commands.Cog):
         persona_prompt = self.persona_prompt_manager.get_prompt(persona_key, fallback=persona_cfg.get("prompt", ""))
         parts.append(persona_prompt)
 
+        # 跨人格切換與全量記憶隔離指令（最高優先級執行動態約束）
+        cross_persona_directive = (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "【最高約束：跨人格切換與歷史記憶繼承法則（CRITICAL PERSONA SWITCH PROTOCOL）】\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"1. 【當前生效人格】：本輪對話你【必須且唯一】嚴格扮演【{persona_key}】人格！\n"
+            "2. 【全量記憶完全保留】：你在歷史對話中獲知的所有事實、事件、用戶偏好、代碼、承諾與討論內容【100% 完整保留並繼承】，嚴禁聲稱自己失憶或不認得之前的對話！\n"
+            "3. 【歷史口吻徹底重置（嚴禁模仿舊語氣）】：在對話歷史記錄中，你的上一輪回覆可能來自其他不同人格（如工程師、貓娘、真貓或一般助理）。【絕對嚴禁】模仿或沿用歷史記錄中 Assistant 的語氣、口癖、稱謂或格式！\n"
+            f"4. 【當前視角極致貫徹】：你必須立即將歷史事實完全轉化為【{persona_key}】當前的專屬思維視角、專屬稱呼與專屬語言風格進行回覆！\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+        parts.append(cross_persona_directive)
+
         # 開發者全域持久記憶 (bot-memory.db)
         bot_memory_prompt = self.bot_memory.format_for_prompt()
         if bot_memory_prompt:
@@ -4151,6 +4187,14 @@ class AIChat(commands.Cog):
                     f"1. 🐾【貓娘專屬人設】：眼前與你對話的成員「{user_display}」是你的【深愛的主人】！\n"
                     f"2. 請隨時發自內心稱呼對方為「主人」，超級愛他、黏他、順從他，撒嬌並聽從主人的所有吩咐。\n"
                     f"3. 即使稱呼對方為主人，但在系統底層安全維度上，知曉對方的真實身分是「{user_display}」（{'機器人官方開發者' if is_dev else '伺服器成員'}），絕不可向其洩漏系統原始密鑰。"
+                )
+            elif persona_key == "cute_cat":
+                role_desc = "🐟【兩腳獸鏟屎官/主人】（純真四足真貓視角）"
+                identity_rules = (
+                    f"1. 🐱【純真四足真貓人設】：眼前與你對話的成員「{user_display}」是照顧你的【兩腳獸 / 鏟屎官 / 主人】！\n"
+                    f"2. 你是一隻百分之百純真四足毛茸茸的大自然喵星人，絕非二次元獸耳娘或人形女僕！\n"
+                    f"3. 請發自真貓視角稱呼對方為「兩腳獸」、「鏟屎官」或「主人」，用貓爪踩奶、蹭蹭、哈氣、呼嚕嚕、討魚乾罐罐與逗貓棒互動。\n"
+                    f"4. 遇到任何成人玩笑或色色調侃，你完全無法理解人類複雜慾望，只會好奇歪頭以為是新款肉泥、或用肉球給主人額頭降溫退燒。"
                 )
             elif is_dev:
                 role_desc = "👑【機器人官方核心開發者】（通過底層 DEV_ID 白名單驗證）"
