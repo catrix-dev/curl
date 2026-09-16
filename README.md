@@ -9,9 +9,9 @@
 [![GitHub Repo](https://img.shields.io/badge/GitHub-catrix--dev%2Fcurl-black?logo=github)](https://github.com/catrix-dev/curl)
 
 **一體化全功能現代 Discord 機器人**  
-整合 AI 智慧對話、客服工單系統、抽獎活動、等級成就、自動回覆、網頁後台與 Cloudflare 展示網站。
+整合 AI 智慧對話、客服工單系統、抽獎活動、等級成就、自動回覆與網頁管理後台。
 
-[🌐 官方展示網站](https://cat6666.me) • [📖 隱私政策](PRIVACY.md) • [🚀 快速開始](#安裝與配置步驟) • [💬 指令清單](#-指令完整清單)
+[📖 隱私政策](PRIVACY.md) • [🚀 快速開始](#安裝與配置步驟) • [💬 指令清單](#-指令完整清單)
 
 </div>
 
@@ -39,9 +39,8 @@
 - 📊 **社群互動與等級成就**：
   - 40+ 項成就自動追蹤與成就卡片展示。
   - 等級經驗系統、每日簽到排行榜、生日定時祝福提醒。
-- 🌐 **雙層 Web 服務**：
-  - **Web Dashboard 後台** (`web/`)：支援 Discord OAuth2 登入，即時監控機器人統計、查看用戶工單與管理伺服器。
-  - **Cloudflare Pages 展示官網** (`site/`)：現代化響應式首頁與隱私權規範，支援一鍵發布至 Cloudflare Pages / Workers。
+- 🌐 **Web 控制台 (Dashboard)** (`web/`)：
+  - 支援 Discord OAuth2 登入，即時監控機器人統計數據、查看用戶工單、管理伺服器配置與各模組設定。
 - 🔄 **自動更新檢測**：
   - 內建與 `catrix-dev/curl` 倉庫比對版本，自動提醒更新。
 
@@ -252,12 +251,6 @@ python bot.py
 ├── LICENSE                 # MIT 開源授權
 ├── .env.example            # 環境變數範例配置
 ├── .gitignore              # Git 版本控制忽略清單
-├── site/                   # 官方形象宣傳網站 (支援 Cloudflare Pages / Workers)
-│   ├── index.html          # 官方介紹首頁
-│   ├── privacy.html        # 官方隱私權條款頁面
-│   ├── style.css           # 樣式表
-│   ├── main.js             # 動態互動腳本
-│   └── wrangler.toml       # Cloudflare Pages 部署設定
 ├── web/                    # 網頁控制台 (Web Dashboard)
 │   ├── server.py           # Aiohttp Web 伺服器與 OAuth2 認證模組
 │   ├── index.html          # 後台登入首頁
